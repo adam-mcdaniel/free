@@ -1,0 +1,14 @@
+[package]
+name = "smpl-typchk"
+version = "0.1.0"
+authors = ["adam-mcdaniel <adam.mcdaniel17@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "typchk"
+path = "src/bin.rs"
+
+[dependencies]
+lazy_static = "1.4"
