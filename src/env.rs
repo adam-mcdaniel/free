@@ -2,19 +2,13 @@ use crate::Value;
 use std::collections::HashMap;
 
 pub struct Env {
-    scope: HashMap<String, Value>
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        self.free();
-    }
+    scope: HashMap<String, Value>,
 }
 
 impl Env {
     pub fn new() -> Self {
         Self {
-            scope: HashMap::new()
+            scope: HashMap::new(),
         }
     }
 
@@ -22,13 +16,18 @@ impl Env {
         self.scope.insert(name.to_string(), value);
     }
 
-    pub fn get(&mut self, name: impl ToString) -> &Value {
-        self.scope.get(&name.to_string()).unwrap()
+    pub fn get(&mut self, name: impl ToString) -> Value {
+        *self.scope.get(&name.to_string()).unwrap()
     }
 
-    fn free(&mut self) {
+    pub fn free(&mut self) {
         for value in self.scope.values() {
-            value.free();
+            if !value.is_ref() {
+                // println!("scope dropping {:#?}", value);
+                value.free();
+            } else {
+                println!("NOT FREEING {:#?}", value);
+            }
         }
     }
 }

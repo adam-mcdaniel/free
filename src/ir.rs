@@ -4,17 +4,28 @@ static mut COMPILED: String = String::new();
 
 #[allow(unused_must_use)]
 pub fn init() {
-    TEMP0.clone();
-    TEMP1.clone();
-    TEMP2.clone();
-    TEMP3.clone();
-    TEMP4.clone();
-    TEMP5.clone();
-    TEMP6.clone();
+    let f = |_: &Value| {};
+    f(&RETURN);
+    f(&TEMP0);
+    f(&TEMP1);
+    f(&TEMP2);
+    f(&TEMP3);
+    f(&TEMP4);
+    f(&TEMP5);
+    f(&TEMP6);
 }
 
 pub fn compile() -> String {
     unsafe {
+        RETURN.free();
+        TEMP0.free();
+        TEMP1.free();
+        TEMP2.free();
+        TEMP3.free();
+        TEMP4.free();
+        TEMP5.free();
+        TEMP6.free();
+        COMPILED += &format!("\nFINAL STACK PTR POS: {}", STACK_PTR);
         return COMPILED.clone();
     }
 }
@@ -22,11 +33,11 @@ pub fn compile() -> String {
 static mut CONTROL_REGISTERS: Vec<Value> = Vec::new();
 pub struct Control;
 impl Control {
-    pub fn if_begin(var: &Value) {
+    pub fn if_begin(var: Value) {
         unsafe {
             COMPILED += "\nIF BEGIN\n";
             TEMP0.zero();
-            CONTROL_REGISTERS.push(var.clone());
+            CONTROL_REGISTERS.push(var);
             COMPILED += &(var.to() + "[" + &var.from());
             COMPILED += "\nCODE BEGIN\n";
         }
@@ -37,10 +48,10 @@ impl Control {
             COMPILED += "\nCODE END\n";
             TEMP0.zero();
             let var = CONTROL_REGISTERS.pop().unwrap();
-            TEMP1.assign(&var);
+            TEMP1.assign(var);
             var.zero();
             COMPILED += &(var.to() + "]" + &var.from());
-            var.assign(&TEMP1);
+            var.assign(*TEMP1);
             TEMP1.zero();
             COMPILED += "\nIF END\n";
         }
@@ -49,7 +60,7 @@ impl Control {
 
 pub struct Stdout;
 impl Stdout {
-    pub fn print(var: &Value) {
+    pub fn print(var: Value) {
         let mut result = String::new();
 
         result += &var.to();
@@ -67,54 +78,74 @@ impl Stdout {
             COMPILED += "\nDONE\n";
         }
     }
+
+    pub fn print_cstr(var: Value) {
+        let mut result = String::new();
+
+        result += &var.to();
+        result += "*[.>]&";
+        result += &var.from();
+
+        unsafe {
+            COMPILED += "\nPRINT CELL\n";
+            COMPILED += &result;
+            COMPILED += "\nDONE\n";
+        }
+    }
 }
 
 lazy_static! {
-    static ref TEMP0: Value = Value::new(1);
-    static ref TEMP1: Value = Value::new(1);
-    static ref TEMP2: Value = Value::new(1);
-    static ref TEMP3: Value = Value::new(1);
-    static ref TEMP4: Value = Value::new(1);
-    static ref TEMP5: Value = Value::new(1);
-    static ref TEMP6: Value = Value::new(1);
+    pub static ref RETURN: Value = Value::new(1);
+    pub static ref TEMP0: Value = Value::new(1);
+    pub static ref TEMP1: Value = Value::new(1);
+    pub static ref TEMP2: Value = Value::new(1);
+    pub static ref TEMP3: Value = Value::new(1);
+    pub static ref TEMP4: Value = Value::new(1);
+    pub static ref TEMP5: Value = Value::new(1);
+    pub static ref TEMP6: Value = Value::new(1);
 }
 
 /// This variable is responsible for keeping track of each statically allocated variable
 /// For example, if a variable `test` is allocated statically with size 4, the STACK_PTR
 /// will be allocated by 4, and the next variable will be allocated at the STACK_PTR
-static mut STACK_PTR: u32 = 0;
+pub static mut STACK_PTR: u32 = 0;
 
 // a = alloc(8);
 // stdout.print(*a);
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Copy, PartialEq, Eq, PartialOrd)]
 pub struct Value {
-    to_instructions: String,
-    from_instructions: String,
-    number_cells: u32,
-    address: Option<u32>,
-    is_reference: bool,
+    pub offset: u32,
+    pub reference_depth: u32,
+    pub number_cells: u32,
 }
 
-
-impl Debug for Value {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self.address {
-            Some(addr) => write!(f, "(to `{}` | from `{}` | {} wide | @{})", self.to(), self.from(), self.size(), addr),
-            None => write!(f, "(to `{}` | from `{}` | {} wide)", self.to(), self.from(), self.size())
-        }
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        let val = Value::new(self.number_cells);
+        val.assign(*self);
+        val
     }
 }
 
+impl Debug for Value {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(
+            f,
+            "(to `{}` | from `{}` | {} wide)",
+            self.to(),
+            self.from(),
+            self.size()
+        )
+    }
+}
 
 impl Value {
     pub fn new(size: u32) -> Self {
         unsafe {
             let result = Self {
-                to_instructions: ">".repeat(STACK_PTR as usize),
-                from_instructions: "<".repeat(STACK_PTR as usize),
+                offset: STACK_PTR,
+                reference_depth: 0,
                 number_cells: size,
-                address: Some(STACK_PTR),
-                is_reference: false,
             };
             STACK_PTR += size;
             return result;
@@ -138,6 +169,26 @@ impl Value {
         result
     }
 
+    pub fn variable_alloc(size: Self) -> Self {
+        let result = Self::new(1);
+
+        result.assign(size);
+
+        unsafe {
+            COMPILED += "\nALLOCATING CELLS\n";
+            COMPILED += &result.to();
+            COMPILED += "?";
+            COMPILED += &result.from();
+            COMPILED += "\nDONE\n";
+        }
+
+        result
+    }
+
+    pub fn is_ref(&self) -> bool {
+        self.reference_depth > 0
+    }
+
     pub fn zero(&self) {
         unsafe {
             COMPILED += &self.to();
@@ -148,11 +199,11 @@ impl Value {
 
     pub fn free(&self) {
         unsafe {
-            if let Some(addr) = self.address {
-                COMPILED += &format!("\nFREEING CELLS {}~{}\n", addr, addr + self.size());
-            } else {
-                COMPILED += "FREEING CELLS";
-            }
+            COMPILED += &format!(
+                "\nFREEING CELLS {}~{}\n",
+                self.offset,
+                self.offset + self.size()
+            );
             COMPILED += &self.to();
 
             for _ in 0..self.size() {
@@ -177,11 +228,7 @@ impl Value {
         }
     }
 
-    pub fn assign(&self, val: &Self) {
-        if val.size() > self.size() {
-            panic!("Cannot assign larger variable to smaller variable");
-        }
-
+    pub fn assign(&self, val: Self) {
         TEMP0.zero();
 
         unsafe {
@@ -196,6 +243,86 @@ impl Value {
                     + &cell_from
                     + &this_to
                     + "+"
+                    + &this_from
+                    + &TEMP0.to()
+                    + "+"
+                    + &TEMP0.from()
+                    + &cell_to
+                    + "-"
+                    + &cell_from
+                    + &cell_to
+                    + "]"
+                    + &cell_from);
+                COMPILED += &(TEMP0.to()
+                    + "["
+                    + &TEMP0.from()
+                    + &cell_to
+                    + "+"
+                    + &cell_from
+                    + &TEMP0.to()
+                    + "-"
+                    + &TEMP0.from()
+                    + &TEMP0.to()
+                    + "]"
+                    + &TEMP0.from());
+            }
+        }
+    }
+
+    pub fn plus_eq(&self, val: Self) {
+        TEMP0.zero();
+
+        unsafe {
+            for cell in 0..val.size() {
+                let cell_to = val.to() + &">".repeat(cell as usize);
+                let cell_from = "<".repeat(cell as usize) + &val.from();
+                let this_to = self.to() + &">".repeat(cell as usize);
+                let this_from = "<".repeat(cell as usize) + &self.from();
+                COMPILED += &(cell_to.clone()
+                    + "["
+                    + &cell_from
+                    + &this_to
+                    + "+"
+                    + &this_from
+                    + &TEMP0.to()
+                    + "+"
+                    + &TEMP0.from()
+                    + &cell_to
+                    + "-"
+                    + &cell_from
+                    + &cell_to
+                    + "]"
+                    + &cell_from);
+                COMPILED += &(TEMP0.to()
+                    + "["
+                    + &TEMP0.from()
+                    + &cell_to
+                    + "+"
+                    + &cell_from
+                    + &TEMP0.to()
+                    + "-"
+                    + &TEMP0.from()
+                    + &TEMP0.to()
+                    + "]"
+                    + &TEMP0.from());
+            }
+        }
+    }
+
+    pub fn minus_eq(&self, val: Self) {
+        TEMP0.zero();
+
+        unsafe {
+            for cell in 0..val.size() {
+                let cell_to = val.to() + &">".repeat(cell as usize);
+                let cell_from = "<".repeat(cell as usize) + &val.from();
+                let this_to = self.to() + &">".repeat(cell as usize);
+                let this_from = "<".repeat(cell as usize) + &self.from();
+                COMPILED += &(cell_to.clone()
+                    + "["
+                    + &cell_from
+                    + &this_to
+                    + "-"
                     + &this_from
                     + &TEMP0.to()
                     + "+"
@@ -250,11 +377,11 @@ impl Value {
     }
 
     pub fn to(&self) -> String {
-        self.to_instructions.to_string()
+        ">".repeat(self.offset as usize).to_string() + &"*".repeat(self.reference_depth as usize)
     }
 
     pub fn from(&self) -> String {
-        self.from_instructions.to_string()
+        "&".repeat(self.reference_depth as usize) + &"<".repeat(self.offset as usize).to_string()
     }
 
     pub fn size(&self) -> u32 {
@@ -263,36 +390,24 @@ impl Value {
 
     pub fn deref(&self) -> Self {
         let mut result = Self::new(1);
-        result.is_reference = true;
-        result.number_cells = self.size();
 
-        result.to_instructions = self.to_instructions.clone();
-        result.from_instructions = self.from_instructions.clone();
-        result.to_instructions += "*";
-        result.from_instructions = String::from("&") + &result.from_instructions;
+        result.reference_depth = self.reference_depth + 1;
+        result.number_cells = self.size();
+        result.offset = self.offset;
+
         result
     }
 
     pub fn refer(&self) -> Self {
         let mut result = Self::new(1);
         result.number_cells = self.size();
-        match self.address {
-            Some(addr) => unsafe {
-                COMPILED += &result.to();
-                COMPILED += &"+".repeat(addr as usize);
-                COMPILED += &result.from();
-            },
-            _ => {}
-        }
-        result
-    }
-}
 
-impl Drop for Value {
-    fn drop(&mut self) {
-        // println!("FREEING {:#?}", self);
-        if !self.is_reference {
-            self.free();
+        unsafe {
+            COMPILED += &result.to();
+            COMPILED += &"+".repeat(self.offset as usize);
+            COMPILED += &result.from();
         }
+
+        result
     }
 }
