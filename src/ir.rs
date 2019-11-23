@@ -1,7 +1,29 @@
-use crate::Error;
+use crate::{Program, Error};
 use core::fmt;
+use std::sync::Mutex;
 
-static mut COMPILED: String = String::new();
+lazy_static! {
+    static ref COMPILED: Mutex<String> = Mutex::new(String::new());
+    static ref CONTROL_REGISTERS: Mutex<Vec<Value>> = Mutex::new(Vec::new());
+
+    /// This variable is responsible for keeping track of each statically allocated variable
+    /// For example, if a variable `test` is allocated statically with size 4, the STACK_PTR
+    /// will be allocated by 4, and the next variable will be allocated at the STACK_PTR
+    pub static ref STACK_PTR: Mutex<u32> = Mutex::new(0);
+    pub static ref RETURN: Value = Value::new(1);
+    pub static ref TEMP0: Value = Value::new(1);
+    pub static ref TEMP1: Value = Value::new(1);
+    pub static ref TEMP2: Value = Value::new(1);
+    pub static ref TEMP3: Value = Value::new(1);
+    pub static ref TEMP4: Value = Value::new(1);
+    pub static ref TEMP5: Value = Value::new(1);
+    pub static ref TEMP6: Value = Value::new(1);
+}
+
+pub fn add_to_compiled(s: impl ToString) {
+    let mut c = COMPILED.lock().unwrap();
+    (*c) += &s.to_string();
+}
 
 #[allow(unused_must_use)]
 pub fn init() {
@@ -14,6 +36,8 @@ pub fn init() {
     f(&TEMP4);
     f(&TEMP5);
     f(&TEMP6);
+
+    add_to_compiled(format!("STARTING STACK PTR IS {} ", *STACK_PTR.lock().unwrap()));
 }
 
 pub fn compile() -> String {
@@ -25,60 +49,54 @@ pub fn compile() -> String {
     TEMP4.free();
     TEMP5.free();
     TEMP6.free();
-    unsafe {
-        COMPILED += &format!("\nFINAL STACK PTR POS: {}", STACK_PTR);
-        return COMPILED.clone();
-    }
+
+    add_to_compiled(format!("FINAL STACK PTR IS {} ", *STACK_PTR.lock().unwrap()));
+
+    COMPILED.lock().unwrap().clone()
 }
 
-static mut CONTROL_REGISTERS: Vec<Value> = Vec::new();
 pub struct Control;
 impl Control {
     pub fn if_begin(var: Value) {
-        unsafe {
-            COMPILED += "\nIF BEGIN\n";
-            TEMP0.zero();
-            CONTROL_REGISTERS.push(var);
-            COMPILED += &(var.to() + "[" + &var.from());
-            COMPILED += "\nCODE BEGIN\n";
-        }
+        add_to_compiled("\nIF BEGIN\n");
+        TEMP0.zero();
+        CONTROL_REGISTERS.lock().unwrap().push(var);
+        add_to_compiled(var.to() + "[" + &var.from() + "\nCODE BEGIN\n");
     }
 
-    pub fn if_end() {
-        unsafe {
-            COMPILED += "\nCODE END\n";
-            TEMP0.zero();
-            let var = CONTROL_REGISTERS.pop().unwrap();
-            TEMP1.assign(var);
-            var.zero();
-            COMPILED += &(var.to() + "]" + &var.from());
-            var.assign(*TEMP1);
-            TEMP1.zero();
-            COMPILED += "\nIF END\n";
-        }
+    pub fn if_end() -> Result<(), Error> {
+        add_to_compiled("\nCODE END\n");
+        TEMP0.zero();
+        let var = CONTROL_REGISTERS.lock().unwrap().pop().unwrap();
+        TEMP1.assign(var)?;
+        var.zero();
+        add_to_compiled(var.to() + "]" + &var.from());
+        var.assign(*TEMP1)?;
+        TEMP1.zero();
+        add_to_compiled("\nIF END\n");
+        Ok(())
     }
 
     pub fn while_begin(var: Value) {
-        unsafe {
-            COMPILED += "\nWHILE BEGIN\n";
-            CONTROL_REGISTERS.push(var);
-            COMPILED += &(var.to() + "[" + &var.from());
-            COMPILED += "\nCODE BEGIN\n";
-        }
+        add_to_compiled("\nWHILE BEGIN\n");
+        // TEMP0.zero();
+        CONTROL_REGISTERS.lock().unwrap().push(var);
+        add_to_compiled(var.to() + "[" + &var.from());
+        add_to_compiled("\nCODE BEGIN\n");
     }
 
     pub fn while_end() {
-        unsafe {
-            COMPILED += "\nCODE END\n";
-            let var = CONTROL_REGISTERS.pop().unwrap();
-            COMPILED += &(var.to() + "]" + &var.from());
-            COMPILED += "\nWHILE END\n";
-        }
+        add_to_compiled("\nCODE END\n");
+        let var = CONTROL_REGISTERS.lock().unwrap().pop().unwrap();
+        add_to_compiled(var.to() + "]" + &var.from());
+        add_to_compiled("\nWHILE END\n");
     }
 }
 
 pub struct Stdout;
 impl Stdout {
+    /// This prints a Value according to its size.
+    /// Basically, this prints each cell that the Value owns.
     pub fn print(var: Value) {
         let mut result = String::new();
 
@@ -91,46 +109,38 @@ impl Stdout {
         }
         result += &var.from();
 
-        unsafe {
-            COMPILED += "\nPRINT CELL\n";
-            COMPILED += &result;
-            COMPILED += "\nDONE\n";
-        }
+        add_to_compiled("\nPRINT CELL\n");
+        add_to_compiled(&result);
+        add_to_compiled("\nDONE\n");
     }
 
+    /// This prints a pointer to a value like a CString
+    /// This requires brainfuck compatibility mode to be disabled.
     pub fn print_cstr(var: Value) {
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(result)
+        }
+
         let mut result = String::new();
 
+        /// Dereference value and print string
         result += &var.to();
         result += "*[.>]&";
+        /// Refer back to home
         result += &var.from();
 
-        unsafe {
-            COMPILED += "\nPRINT CELL\n";
-            COMPILED += &result;
-            COMPILED += "\nDONE\n";
-        }
+        add_to_compiled("\nPRINT CELL\n");
+        add_to_compiled(&result);
+        add_to_compiled("\nDONE\n");
     }
 }
 
-lazy_static! {
-    pub static ref RETURN: Value = Value::new(1);
-    pub static ref TEMP0: Value = Value::new(1);
-    pub static ref TEMP1: Value = Value::new(1);
-    pub static ref TEMP2: Value = Value::new(1);
-    pub static ref TEMP3: Value = Value::new(1);
-    pub static ref TEMP4: Value = Value::new(1);
-    pub static ref TEMP5: Value = Value::new(1);
-    pub static ref TEMP6: Value = Value::new(1);
-}
-
-/// This variable is responsible for keeping track of each statically allocated variable
-/// For example, if a variable `test` is allocated statically with size 4, the STACK_PTR
-/// will be allocated by 4, and the next variable will be allocated at the STACK_PTR
-pub static mut STACK_PTR: u32 = 0;
-
-// a = alloc(8);
-// stdout.print(*a);
+/// This object represents a value stored on the tape.
+/// Objects can be stored indirectly or directly.
+/// In brainfuck compatibility mode, dereferencing
+/// or referencing an object is illegal.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Value {
     pub offset: u32,
@@ -152,54 +162,61 @@ impl fmt::Debug for Value {
 
 impl Value {
     pub fn new(size: u32) -> Self {
-        unsafe {
-            let result = Self {
-                offset: STACK_PTR,
-                reference_depth: 0,
-                number_cells: size,
-            };
-            STACK_PTR += size;
-            return result;
-        }
+        let result = Self {
+            offset: *STACK_PTR.lock().unwrap(),
+            reference_depth: 0,
+            number_cells: size,
+        };
+
+        result.zero();
+
+        *(STACK_PTR.lock().unwrap()) += size;
+        result
     }
 
-    pub fn alloc(size: u32) -> Self {
+    pub fn alloc(size: u32) -> Result<Self, Error> {
         let mut result = Self::new(1);
         result.number_cells = size;
 
-        unsafe {
-            COMPILED += &format!("\nALLOCATING {} CELLS\n", size);
-            COMPILED += &result.to();
-            COMPILED += &"+".repeat(size as usize);
-            COMPILED += "?*";
-            COMPILED += &"+>".repeat(size as usize);
-            COMPILED += "&";
-            COMPILED += &result.from();
-            COMPILED += "\nDONE\n";
+        add_to_compiled(format!("\nALLOCATING {} CELLS\n", size));
+        add_to_compiled(result.to());
+        add_to_compiled("+".repeat(size as usize));
+        add_to_compiled("?*");
+        add_to_compiled("+>".repeat(size as usize));
+        add_to_compiled("&");
+        add_to_compiled(result.from());
+        add_to_compiled("\nDONE\n");
+
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(result)
         }
-        result
     }
 
-    pub fn variable_alloc(size: Self) -> Self {
+    pub fn variable_alloc(size: Self) -> Result<Self, Error> {
         let result = Self::new(1);
 
-        result.assign(size);
+        result.assign(size)?;
 
-        unsafe {
-            COMPILED += "\nALLOCATING CELLS\n";
-            COMPILED += &result.to();
-            COMPILED += "?";
-            COMPILED += &result.from();
-            COMPILED += "\nDONE\n";
+        add_to_compiled("\nALLOCATING CELLS\n");
+        add_to_compiled(&result.to());
+        add_to_compiled("?");
+        add_to_compiled(&result.from());
+        add_to_compiled("\nDONE\n");
+
+
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(result)
         }
-
-        result
     }
 
-    pub fn copy(&self) -> Self {
+    pub fn copy(&self) -> Result<Self, Error> {
         let val = Value::new(self.number_cells);
-        val.assign(*self);
-        val
+        val.assign(*self)?;
+        Ok(val)
     }
 
     pub fn is_ref(&self) -> bool {
@@ -207,56 +224,62 @@ impl Value {
     }
 
     pub fn zero(&self) {
-        unsafe {
-            COMPILED += &self.to();
-            COMPILED += "[-]";
-            COMPILED += &self.from();
+        add_to_compiled(self.to());
+        for _ in 0..self.number_cells {
+            add_to_compiled("[-]>");
         }
+        for _ in 0..self.number_cells {
+            add_to_compiled("<");
+        }
+        add_to_compiled(self.from());
     }
 
     pub fn free(&self) {
-        unsafe {
-            COMPILED += &format!(
-                "\nFREEING CELLS {}~{}\n",
-                self.offset,
-                self.offset + self.size()
-            );
-            COMPILED += &self.to();
+        add_to_compiled(&format!(
+            "\nFREEING CELLS {}~{}\n",
+            self.offset,
+            self.offset + self.size()
+        ));
+        add_to_compiled(&self.to());
 
-            for _ in 0..self.size() {
-                COMPILED += "[-]>";
-            }
-
-            for _ in 0..self.size() {
-                COMPILED += "<";
-            }
-
-            COMPILED += &self.from();
-
-            COMPILED += "\nDONE\n";
+        for _ in 0..self.size() {
+            add_to_compiled("[-]>");
         }
+
+        for _ in 0..self.size() {
+            add_to_compiled("<");
+        }
+
+        add_to_compiled(self.from());
+
+        add_to_compiled("\nDONE\n");
     }
 
     pub fn set(&self, val: impl Into<usize>) {
-        unsafe {
-            COMPILED += &self.to();
-            COMPILED += "[-]";
-            COMPILED += &"+".repeat(val.into());
-            COMPILED += &self.from();
-        }
+        add_to_compiled(&self.to());
+        add_to_compiled("[-]");
+        add_to_compiled("+".repeat(val.into()));
+        add_to_compiled(self.from());
     }
 
-    pub fn assign(&self, val: Self) {
+    pub fn assign(&self, val: Self) -> Result<(), Error> {
+        if Program::brainfuck_enabled() && val.size() > self.size() {
+            return Err(Error::CannotAssignLargerValueToSmallerValueInBrainFuckMode)
+        } else if Program::size_warn_enabled() && val.size() > self.size() {
+            eprintln!("Warning: assigning larger value to smaller value");
+        }
+
+
         TEMP0.zero();
 
-        unsafe {
-            for cell in 0..val.size() {
-                let cell_to = val.to() + &">".repeat(cell as usize);
-                let cell_from = "<".repeat(cell as usize) + &val.from();
-                let this_to = self.to() + &">".repeat(cell as usize);
-                let this_from = "<".repeat(cell as usize) + &self.from();
-                COMPILED += &(this_to.clone() + "[-]" + &this_from);
-                COMPILED += &(cell_to.clone()
+        for cell in 0..val.size() {
+            let cell_to = val.to() + &">".repeat(cell as usize);
+            let cell_from = "<".repeat(cell as usize) + &val.from();
+            let this_to = self.to() + &">".repeat(cell as usize);
+            let this_from = "<".repeat(cell as usize) + &self.from();
+            add_to_compiled(this_to.clone() + "[-]" + &this_from);
+            add_to_compiled(
+                cell_to.clone()
                     + "["
                     + &cell_from
                     + &this_to
@@ -270,8 +293,10 @@ impl Value {
                     + &cell_from
                     + &cell_to
                     + "]"
-                    + &cell_from);
-                COMPILED += &(TEMP0.to()
+                    + &cell_from,
+            );
+            add_to_compiled(
+                TEMP0.to()
                     + "["
                     + &TEMP0.from()
                     + &cell_to
@@ -282,21 +307,22 @@ impl Value {
                     + &TEMP0.from()
                     + &TEMP0.to()
                     + "]"
-                    + &TEMP0.from());
-            }
+                    + &TEMP0.from(),
+            );
         }
+        Ok(())
     }
 
     pub fn plus_eq(&self, val: Self) {
         TEMP0.zero();
 
-        unsafe {
-            for cell in 0..val.size() {
-                let cell_to = val.to() + &">".repeat(cell as usize);
-                let cell_from = "<".repeat(cell as usize) + &val.from();
-                let this_to = self.to() + &">".repeat(cell as usize);
-                let this_from = "<".repeat(cell as usize) + &self.from();
-                COMPILED += &(cell_to.clone()
+        for cell in 0..val.size() {
+            let cell_to = val.to() + &">".repeat(cell as usize);
+            let cell_from = "<".repeat(cell as usize) + &val.from();
+            let this_to = self.to() + &">".repeat(cell as usize);
+            let this_from = "<".repeat(cell as usize) + &self.from();
+            add_to_compiled(
+                cell_to.clone()
                     + "["
                     + &cell_from
                     + &this_to
@@ -310,8 +336,10 @@ impl Value {
                     + &cell_from
                     + &cell_to
                     + "]"
-                    + &cell_from);
-                COMPILED += &(TEMP0.to()
+                    + &cell_from,
+            );
+            add_to_compiled(
+                TEMP0.to()
                     + "["
                     + &TEMP0.from()
                     + &cell_to
@@ -322,21 +350,21 @@ impl Value {
                     + &TEMP0.from()
                     + &TEMP0.to()
                     + "]"
-                    + &TEMP0.from());
-            }
+                    + &TEMP0.from(),
+            );
         }
     }
 
     pub fn minus_eq(&self, val: Self) {
         TEMP0.zero();
 
-        unsafe {
-            for cell in 0..val.size() {
-                let cell_to = val.to() + &">".repeat(cell as usize);
-                let cell_from = "<".repeat(cell as usize) + &val.from();
-                let this_to = self.to() + &">".repeat(cell as usize);
-                let this_from = "<".repeat(cell as usize) + &self.from();
-                COMPILED += &(cell_to.clone()
+        for cell in 0..val.size() {
+            let cell_to = val.to() + &">".repeat(cell as usize);
+            let cell_from = "<".repeat(cell as usize) + &val.from();
+            let this_to = self.to() + &">".repeat(cell as usize);
+            let this_from = "<".repeat(cell as usize) + &self.from();
+            add_to_compiled(
+                cell_to.clone()
                     + "["
                     + &cell_from
                     + &this_to
@@ -350,8 +378,10 @@ impl Value {
                     + &cell_from
                     + &cell_to
                     + "]"
-                    + &cell_from);
-                COMPILED += &(TEMP0.to()
+                    + &cell_from,
+            );
+            add_to_compiled(
+                TEMP0.to()
                     + "["
                     + &TEMP0.from()
                     + &cell_to
@@ -362,54 +392,51 @@ impl Value {
                     + &TEMP0.from()
                     + &TEMP0.to()
                     + "]"
-                    + &TEMP0.from());
-            }
+                    + &TEMP0.from(),
+            );
         }
     }
 
     pub fn byte_int(value: u8) -> Self {
         let result = Self::new(1);
-        unsafe {
-            COMPILED += &result.to();
-            COMPILED += &"+".repeat(value as usize);
-            COMPILED += &result.from();
-        }
+        add_to_compiled(result.to());
+        add_to_compiled("+".repeat(value as usize));
+        add_to_compiled(result.from());
         result
     }
 
-    pub fn unsigned_4byte_int(value: u32) -> Self {
+    pub fn unsigned_4byte_int(value: u32) -> Result<Self, Error> {
         let result = Self::new(1);
-        unsafe {
-            COMPILED += &result.to();
-            COMPILED += &"+".repeat(value as usize);
-            COMPILED += &result.from();
+        add_to_compiled(result.to());
+        add_to_compiled("+".repeat(value as usize));
+        add_to_compiled(result.from());
+
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUse4ByteUnsignedIntsInBrainFuckMode)
+        } else {
+            Ok(result)
         }
-        result
     }
 
     pub fn character(value: char) -> Self {
         let result = Self::new(1);
-        unsafe {
-            COMPILED += &result.to();
-            COMPILED += &"+".repeat(value as usize);
-            COMPILED += &result.from();
-        }
+        add_to_compiled(result.to());
+        add_to_compiled("+".repeat(value as usize));
+        add_to_compiled(result.from());
         result
     }
 
     pub fn string(value: impl ToString) -> Self {
         let result = Self::new(value.to_string().len() as u32);
 
-        unsafe {
-            COMPILED += &result.to();
-            for ch in value.to_string().chars() {
-                COMPILED += &("+".repeat(ch as usize) + ">");
-            }
-            for _ in value.to_string().chars() {
-                COMPILED += "<";
-            }
-            COMPILED += &result.from();
+        add_to_compiled(result.to());
+        for ch in value.to_string().chars() {
+            add_to_compiled("+".repeat(ch as usize) + ">");
         }
+        for _ in value.to_string().chars() {
+            add_to_compiled("<");
+        }
+        add_to_compiled(result.from());
 
         result
     }
@@ -426,25 +453,31 @@ impl Value {
         self.number_cells
     }
 
-    pub fn deref(&self) -> Self {
+    pub fn deref(&self) -> Result<Self, Error> {
         let mut result = Self::new(1);
         // result.number_cells = self.size();
 
         result.reference_depth = self.reference_depth + 1;
         result.offset = self.offset;
 
-        result
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(result)
+        }
     }
 
     pub fn refer(&self) -> Result<Self, Error> {
         let result = Self::new(1);
-        
-        unsafe {
-            COMPILED += &result.to();
-            COMPILED += &"+".repeat(self.offset as usize);
-            COMPILED += &result.from();
-        }
 
-        Ok(result)
+        add_to_compiled(result.to());
+        add_to_compiled("+".repeat(self.offset as usize));
+        add_to_compiled(result.from());
+
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(result)
+        }
     }
 }

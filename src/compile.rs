@@ -1,26 +1,60 @@
+use crate::{Control, Env, ProgramParser, Value, RETURN, STACK_PTR, add_to_compiled};
 use comment::rust::strip;
-use crate::{Control, Env, Value, RETURN, STACK_PTR, ProgramParser};
+use rand::prelude::*;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 
 
+lazy_static! {
+    pub static ref SCOPE_STACK: Mutex<Vec<Env>> = Mutex::new(vec![Env::new()]);
+    static ref ENABLE_BRAINFUCK: Mutex<bool> = Mutex::new(false);
+    static ref ENABLE_SIZE_WARN: Mutex<bool> = Mutex::new(false);
+    static ref FN_DEFS: Mutex<HashMap<String, UserFn>> = Mutex::new(HashMap::new());
+    static ref FOREIGN_FN_DEFS: Mutex<HashMap<String, ForeignFn>> = Mutex::new(HashMap::new());
+}
+
+fn rand_str() -> String {
+    thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(10)
+        .collect()
+} 
+
+
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct Program(Vec<Flag>, Vec<UserFn>);
+
 
 impl<T: ToString> From<T> for Program {
     fn from(t: T) -> Self {
         match ProgramParser::new().parse(&strip(t.to_string()).unwrap()) {
             Ok(val) => val,
-            Err(e) => panic!("{:#?}", e)
+            Err(e) => panic!("{:#?}", e),
         }
     }
 }
 
 impl Program {
     pub fn new(flags: Vec<Flag>, funs: Vec<UserFn>) -> Self {
+        for flag in &flags {
+            match flag {
+                Flag::EnableBrainFuck => *ENABLE_BRAINFUCK.lock().unwrap() = true,
+                Flag::EnableSizeWarn => *ENABLE_SIZE_WARN.lock().unwrap() = true
+            }
+        }
         Self(flags, funs)
+    }
+
+    pub fn brainfuck_enabled() -> bool {
+        *ENABLE_BRAINFUCK.lock().unwrap()
+    }
+
+    pub fn size_warn_enabled() -> bool {
+        *ENABLE_SIZE_WARN.lock().unwrap()
     }
 
     pub fn compile(self) -> Result<(), Error> {
@@ -34,15 +68,18 @@ impl Program {
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Flag {
-    DisablePtrs,
-    EnableSizeWarn
+    EnableBrainFuck,
+    EnableSizeWarn,
 }
 
 #[derive(Clone, Debug)]
 pub enum Error {
     CannotReferenceAReference,
+    CannotUsePointersInBrainFuckMode,
+    CannotUse4ByteUnsignedIntsInBrainFuckMode,
+    CannotAssignLargerValueToSmallerValueInBrainFuckMode,
     FunctionNotDefined(String),
-    VariableNotDefined(String, Env)
+    VariableNotDefined(String, Env),
 }
 
 pub trait Lower {
@@ -59,12 +96,6 @@ pub trait Compile {
     fn compile(&self) -> Result<(), Error>;
 }
 
-lazy_static! {
-    pub static ref SCOPE_STACK: Mutex<Vec<Env>> = Mutex::new(vec![Env::new()]);
-    static ref FN_DEFS: Mutex<HashMap<String, UserFn>> = Mutex::new(HashMap::new());
-    static ref FOREIGN_FN_DEFS: Mutex<HashMap<String, ForeignFn>> = Mutex::new(HashMap::new());
-}
-
 fn push_scope(env: Env) {
     SCOPE_STACK.lock().unwrap().push(env);
 }
@@ -73,19 +104,18 @@ fn pop_scope() -> Env {
     SCOPE_STACK.lock().unwrap().pop().unwrap()
 }
 
-pub fn set_return(val: Value) {
+pub fn set_return(val: Value) -> Result<(), Error> {
     RETURN.zero();
-    RETURN.assign(val);
-    // RETURN.assign(val.copy());
+    RETURN.assign(val)?;
+    Ok(())
 }
 
 pub fn get_return() -> Result<Value, Error> {
-    unsafe {
-        let val = Eval::Value(*RETURN);
-        let name = format!("%TEMP_RETURN{}%", STACK_PTR);
-        define(&name, val)?;
-        get(name)
-    }
+    // let val = Eval::Value(*RETURN);
+    // let name = format!("%TEMP_RETURN{}%", *STACK_PTR.lock().unwrap());
+    // define(&name, val)?;
+    // get(name)
+    Ok(*RETURN)
 }
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
@@ -95,7 +125,7 @@ pub enum Eval {
     Call(Call),
     Deref(Deref),
     Refer(Refer),
-    Value(Value)
+    Value(Value),
 }
 
 impl Lower for Eval {
@@ -125,7 +155,9 @@ impl Compile for Expr {
     fn compile(&self) -> Result<(), Error> {
         match self {
             Self::If(l) => l.compile()?,
-            Self::Eval(e) => { e.lower()?; },
+            Self::Eval(e) => {
+                e.lower()?;
+            }
             Self::Define(def) => def.compile()?,
             Self::Assign(a) => a.compile()?,
             Self::While(w) => w.compile()?,
@@ -147,7 +179,7 @@ impl Return {
 impl Compile for Return {
     fn compile(&self) -> Result<(), Error> {
         let Return(val) = self;
-        set_return(val.lower()?);
+        set_return(val.lower()?)?;
         Ok(())
     }
 }
@@ -164,9 +196,9 @@ impl Call {
 impl Lower for Call {
     fn lower(&self) -> Result<Value, Error> {
         let Call(name, args) = self;
-        println!("CALLING {}", name);
+        add_to_compiled(format!("CALLING {}", name));
         call(name, args)?;
-        println!("DONE");
+        add_to_compiled("DONE");
         get_return()
     }
 }
@@ -183,7 +215,7 @@ impl Deref {
 impl Lower for Deref {
     fn lower(&self) -> Result<Value, Error> {
         let Deref(refer) = self;
-        Ok(refer.lower()?.deref())
+        Ok(refer.lower()?.deref()?)
     }
 }
 
@@ -224,7 +256,7 @@ pub enum Literal {
     String(String),
     Character(char),
     ByteInt(u8),
-    Unsigned4ByteInt(u32)
+    Unsigned4ByteInt(u32),
 }
 
 impl Literal {
@@ -250,23 +282,37 @@ impl Lower for Literal {
         let name;
         match self {
             Self::String(s) => {
-                unsafe { name = format!("%TEMP_STR_LITERAL{}%", STACK_PTR) }
-                define_no_cp(&name, Eval::Value(Value::string(s))).unwrap();
+                name = format!("%TEMP_STR_LITERAL_{}%", rand_str());
+                define_no_cp(&name, Eval::Value(Value::string(s)))?;
             }
             Self::Character(ch) => {
-                unsafe { name = format!("%TEMP_CHAR_LITERAL{}%", STACK_PTR) }
-                define_no_cp(&name, Eval::Value(Value::character(*ch))).unwrap();
+                name = format!("%TEMP_CHAR_LITERAL_{}%", rand_str());
+                define_no_cp(&name, Eval::Value(Value::character(*ch)))?;
             }
             Self::ByteInt(byte) => {
-                unsafe { name = format!("%TEMP_BYTE_LITERAL{}%", STACK_PTR) }
-                define_no_cp(&name, Eval::Value(Value::byte_int(*byte))).unwrap();
+                name = format!("%TEMP_BYTE_LITERAL_{}%", rand_str());
+                define_no_cp(&name, Eval::Value(Value::byte_int(*byte)))?;
             }
             Self::Unsigned4ByteInt(ui) => {
-                unsafe { name = format!("%TEMP_U32_LITERAL{}%", STACK_PTR) }
-                define_no_cp(&name, Eval::Value(Value::unsigned_4byte_int(*ui))).unwrap();
+                name = format!("%TEMP_U32_LITERAL_{}%", rand_str());
+                define_no_cp(&name, Eval::Value(Value::unsigned_4byte_int(*ui)?))?;
             }
         }
         get(name)
+        // match self {
+        //     Self::String(s) => {
+        //         Value::string(s).copy()
+        //     }
+        //     Self::Character(ch) => {
+        //         Value::character(*ch).copy()
+        //     }
+        //     Self::ByteInt(byte) => {
+        //         Value::byte_int(*byte).copy()
+        //     }
+        //     Self::Unsigned4ByteInt(ui) => {
+        //         Value::unsigned_4byte_int(*ui)?.copy()
+        //     }
+        // }
     }
 }
 
@@ -277,14 +323,12 @@ pub fn deforfun(name: impl ToString, args: &[&'static str], fun: fn() -> Result<
         .insert(name.to_string(), ForeignFn::new(args.to_vec(), fun));
 }
 
-
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct UserFn {
     name: String,
     parameters: Vec<String>,
     body: Vec<Expr>,
 }
-
 
 impl UserFn {
     pub fn new(name: impl ToString, parameters: Vec<String>, body: Vec<Expr>) -> Self {
@@ -296,22 +340,17 @@ impl UserFn {
     }
 
     pub fn compile(self) {
-        FN_DEFS.lock().unwrap().insert(
-            self.name.clone(),
-            self
-        );
+        FN_DEFS.lock().unwrap().insert(self.name.clone(), self);
     }
 
     pub fn call(&self, args: &Vec<Eval>) -> Result<(), Error> {
         let stack_frame;
-        unsafe {
-            stack_frame = STACK_PTR;
-        }
+        stack_frame = *STACK_PTR.lock().unwrap();
 
         let mut env = Env::new();
 
         for (i, p) in self.parameters.iter().enumerate() {
-            env.define(p.to_string(), args[i].lower()?);//.copy());
+            env.define(p.to_string(), args[i].lower()?)?; //.copy());
         }
 
         push_scope(env);
@@ -320,10 +359,8 @@ impl UserFn {
             instruction.compile()?;
         }
 
-        unsafe {
-            pop_scope().free();
-            STACK_PTR = stack_frame + RETURN.size();
-        }
+        pop_scope().free();
+        *STACK_PTR.lock().unwrap() = stack_frame;// + RETURN.size();
 
         Ok(())
     }
@@ -332,11 +369,9 @@ impl UserFn {
 pub fn call(name: impl ToString, args: &Vec<Eval>) -> Result<(), Error> {
     let table = FN_DEFS.lock().unwrap();
     if let Some(f_ref) = table.get(&name.to_string()) {
-        let fun = f_ref as *const UserFn;
+        let fun = f_ref.clone();
         drop(table);
-        unsafe {
-            (*fun).call(args)?;
-        }
+        fun.call(args)?;
         return Ok(());
     } else {
         drop(table)
@@ -344,22 +379,19 @@ pub fn call(name: impl ToString, args: &Vec<Eval>) -> Result<(), Error> {
 
     let table = FOREIGN_FN_DEFS.lock().unwrap();
     if let Some(f_ref) = table.get(&name.to_string()) {
-        let fun = f_ref as *const ForeignFn;
+        let fun = f_ref.clone();
         drop(table);
-        unsafe {
-            (*fun).call(args)?;
-        }
+        fun.call(args)?;
         return Ok(());
-    } else {
-        drop(table)
     }
 
     Err(Error::FunctionNotDefined(name.to_string()))
 }
 
 pub fn define(name: impl ToString, val: Eval) -> Result<(), Error> {
-    Define::new("%TEMP_DEFINE%", val).compile()?;
-    Define::new(name, Eval::Load(Load::new("%TEMP_DEFINE%"))).compile()?;
+    let temp_name = format!("%TEMP_DEFINE_{}%", rand_str());
+    Define::new(&temp_name, val).compile()?;
+    Define::new(name, Eval::Load(Load::new(temp_name))).compile()?;
     Ok(())
 }
 
@@ -367,25 +399,19 @@ pub fn define_no_cp(final_name: impl ToString, value: Eval) -> Result<(), Error>
     // Define::new("%TEMP_DEFINE%", val).compile()?;
     // Define::new(name, Eval::Load(Load::new("%TEMP_DEFINE%"))).compile()?;
     // Ok(())
-    let name = "%TEMP_DEFINE%";
+    let name = format!("%TEMP_DEFINE_{}%", rand_str());
 
-    let mut scope_stack = SCOPE_STACK.lock().unwrap();
-    let scope = scope_stack.last_mut().unwrap() as *mut Env;
-    drop(scope_stack);
     let val = value.lower()?;
-    unsafe {
-        (*scope).define_no_cp(&name, val);
-    }
-
-    
     let mut scope_stack = SCOPE_STACK.lock().unwrap();
-    let scope = scope_stack.last_mut().unwrap() as *mut Env;
+    let scope = scope_stack.last_mut().unwrap();
+    scope.define_no_cp(&name, val);
     drop(scope_stack);
-    unsafe {
-        (*scope).define_no_cp(final_name, get(name)?);
-    }
 
-
+    let val = get(name)?;
+    let mut scope_stack = SCOPE_STACK.lock().unwrap();
+    let scope = scope_stack.last_mut().unwrap();
+    scope.define_no_cp(final_name, val);
+    drop(scope_stack);
 
     Ok(())
 }
@@ -395,7 +421,6 @@ pub fn get(name: impl ToString) -> Result<Value, Error> {
     let scope = scope_stack.last_mut().unwrap();
     scope.get(name.to_string())
 }
-
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct Define(String, Eval);
@@ -409,16 +434,15 @@ impl Define {
 impl Compile for Define {
     fn compile(&self) -> Result<(), Error> {
         let Define(name, value) = self;
-        println!("DEFINING {}", name);
+        add_to_compiled(format!("DEFINING {}", name));
 
-        let mut scope_stack = SCOPE_STACK.lock().unwrap();
-        let scope = scope_stack.last_mut().unwrap() as *mut Env;
-        drop(scope_stack);
         let val = value.lower()?;
-        unsafe {
-            (*scope).define(name, val);
-        }
-        println!("DONE");
+        let mut scope_stack = SCOPE_STACK.lock().unwrap();
+        let scope = scope_stack.last_mut().unwrap();
+        scope.define(&name, val)?;
+        drop(scope_stack);
+
+        add_to_compiled("DONE");
 
         Ok(())
     }
@@ -436,11 +460,10 @@ impl Assign {
 impl Compile for Assign {
     fn compile(&self) -> Result<(), Error> {
         let Assign(lhs, rhs) = self;
-        lhs.lower()?.assign(rhs.lower()?);
+        lhs.lower()?.assign(rhs.lower()?)?;
         Ok(())
     }
 }
-
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct If(Eval, Vec<Expr>, Vec<Expr>);
@@ -460,7 +483,7 @@ impl Compile for If {
                 exp.compile()?;
             }
         }
-        Control::if_end();
+        Control::if_end()?;
         Ok(())
     }
 }
@@ -512,14 +535,12 @@ impl ForeignFn {
 
     pub fn call(&self, args: &Vec<Eval>) -> Result<(), Error> {
         let stack_frame;
-        unsafe {
-            stack_frame = STACK_PTR;
-        }
+        stack_frame = *STACK_PTR.lock().unwrap();
 
         let mut env = Env::new();
 
         for (i, p) in self.parameters.iter().enumerate() {
-            env.define(p.to_string(), args[i].lower()?);//.copy());
+            env.define(p.to_string(), args[i].lower()?)?; //.copy());
         }
 
         push_scope(env);
@@ -527,10 +548,8 @@ impl ForeignFn {
         (self.body)()?;
 
         // pop_scope();
-        unsafe {
-            pop_scope().free();
-            STACK_PTR = stack_frame + RETURN.size();
-        }
+        pop_scope().free();
+        *STACK_PTR.lock().unwrap() = stack_frame; // + RETURN.size();
 
         Ok(())
     }

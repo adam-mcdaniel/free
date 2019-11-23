@@ -1,126 +1,26 @@
-CALLING test
-DEFINING a
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_CHAR_LITERAL8%
-DONE
-DONE
-DEFINING b
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_CHAR_LITERAL9%
-DONE
-DONE
-CALLING print
-CALLING add
-DONE
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_RETURN%
-DONE
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_CHAR_LITERAL11%
-DONE
-DONE
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_RETURN%
-DONE
-CALLING print
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_CHAR_LITERAL11%
-DONE
-DONE
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_RETURN%
-DONE
-DONE
-DEFINING %TEMP_DEFINE%
-DONE
-DEFINING %TEMP_RETURN%
-DONE
->>>>>>>>+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++<<<<<<<<>>>>>>>>>+<<<<<<<<<>[-]<>>>>>>>>>>[-]<<<<<<<<<<>>>>>>>>[<<<<<<<<>>>>>>>>>>+<<<<<<<<<<>+<>>>>>>>>-<<<<<<<<>>>>>>>>]<<<<<<<<>[<>>>>>>>>+<<<<<<<<>-<>]<>[-]<>>>>>>>>>>>[-]<<<<<<<<<<<>>>>>>>>>[<<<<<<<<<>>>>>>>>>>>+<<<<<<<<<<<>+<>>>>>>>>>-<<<<<<<<<>>>>>>>>>]<<<<<<<<<>[<>>>>>>>>>+<<<<<<<<<>-<>]<>[-]<>>>>>>>>>>>[<<<<<<<<<<<>>>>>>>>>>+<<<<<<<<<<>+<>>>>>>>>>>>-<<<<<<<<<<<>>>>>>>>>>>]<<<<<<<<<<<>[<>>>>>>>>>>>+<<<<<<<<<<<>-<>]<>[-]<[-]>>>>>>>>>>[<<<<<<<<<<+>+<>>>>>>>>>>-<<<<<<<<<<>>>>>>>>>>]<<<<<<<<<<>[<>>>>>>>>>>+<<<<<<<<<<>-<>]<
-FREEING CELLS 11~12
->>>>>>>>>>>[-]><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 10~11
->>>>>>>>>>[-]><<<<<<<<<<<
-DONE
->[-]<>>>>>>>>>>[-]<<<<<<<<<<[>>>>>>>>>>+<<<<<<<<<<>+<-]>[<+>-<>]<
+[-]><>[-]><<>>[-]><<<>>>[-]><<<<>>>>[-]><<<<<>>>>>[-]><<<<<<>>>>>>[-]><<<<<<<>>>>>>>[-]><<<<<<<<STARTING STACK PTR IS 8 CALLING beepCALLING prn>>>>>>>>[-]><<<<<<<<<>>>>>>>>+++++++<<<<<<<<>>>>>>>>>[-]><<<<<<<<<<>[-]><<>>>>>>>>>[-]<<<<<<<<<>>>>>>>>[<<<<<<<<>>>>>>>>>+<<<<<<<<<>+<>>>>>>>>-<<<<<<<<>>>>>>>>]<<<<<<<<>[<>>>>>>>>+<<<<<<<<>-<>]<
 PRINT CELL
->>>>>>>>>>.><<<<<<<<<<<
-DONE
->>>>>>>>>>>++++++++++<<<<<<<<<<<
-PRINT CELL
->>>>>>>>>>>.><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 11~12
->>>>>>>>>>>[-]><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 11~12
->>>>>>>>>>>[-]><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 10~11
->>>>>>>>>>[-]><<<<<<<<<<<
-DONE
->[-]<>>>>>>>>>>[-]<<<<<<<<<<>>>>>>>>[<<<<<<<<>>>>>>>>>>+<<<<<<<<<<>+<>>>>>>>>-<<<<<<<<>>>>>>>>]<<<<<<<<>[<>>>>>>>>+<<<<<<<<>-<>]<
-PRINT CELL
->>>>>>>>>>.><<<<<<<<<<<
-DONE
->>>>>>>>>>>++++++++++<<<<<<<<<<<
-PRINT CELL
->>>>>>>>>>>.><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 11~12
->>>>>>>>>>>[-]><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 10~11
->>>>>>>>>>[-]><<<<<<<<<<<
-DONE
-
-FREEING CELLS 11~12
->>>>>>>>>>>[-]><<<<<<<<<<<<
-DONE
-
-FREEING CELLS 8~9
->>>>>>>>[-]><<<<<<<<<
+>>>>>>>>>.><<<<<<<<<<
 DONE
 
 FREEING CELLS 9~10
 >>>>>>>>>[-]><<<<<<<<<<
 DONE
-
+DONE
 FREEING CELLS 8~9
 >>>>>>>>[-]><<<<<<<<<
 DONE
 
-FREEING CELLS 0~1
-[-]><
+FREEING CELLS 8~9
+>>>>>>>>[-]><<<<<<<<<
+DONE
+DONE>>>>>>>>[-]><<<<<<<<<>>>>>>>><<<<<<<<[-]><>[-]><<[-]>>>>>>>>[<<<<<<<<+>+<>>>>>>>>-<<<<<<<<>>>>>>>>]<<<<<<<<>[<>>>>>>>>+<<<<<<<<>-<>]<
+FREEING CELLS 8~9
+>>>>>>>>[-]><<<<<<<<<
 DONE
 
-FREEING CELLS 9~10
->>>>>>>>>[-]><<<<<<<<<<
-DONE
-
-FREEING CELLS 0~1
-[-]><
-DONE
-
-FREEING CELLS 0~1
-[-]><
-DONE
-
-FREEING CELLS 0~1
-[-]><
+FREEING CELLS 8~9
+>>>>>>>>[-]><<<<<<<<<
 DONE
 
 FREEING CELLS 0~1
@@ -154,5 +54,4 @@ DONE
 FREEING CELLS 7~8
 >>>>>>>[-]><<<<<<<<
 DONE
-
-FINAL STACK PTR POS: 8
+FINAL STACK PTR IS 8 

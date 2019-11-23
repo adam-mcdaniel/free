@@ -1,4 +1,4 @@
-use crate::{Value, Error};
+use crate::{Error, Value, add_to_compiled};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -13,24 +13,27 @@ impl Env {
         }
     }
 
-    pub fn define(&mut self, name: impl ToString, value: Value) {
+    pub fn define(&mut self, name: impl ToString, value: Value) -> Result<(), Error> {
         if let Ok(previous_value) = self.get(name.to_string()) {
-            previous_value.zero();
+            previous_value.free();
         }
-        self.scope.insert(name.to_string(), value.copy());
+        
+        self.scope.insert(name.to_string(), value.copy()?);
+        Ok(())
     }
 
     pub fn define_no_cp(&mut self, name: impl ToString, value: Value) {
         if let Ok(previous_value) = self.get(name.to_string()) {
-            previous_value.zero();
+            previous_value.free();
         }
+        
         self.scope.insert(name.to_string(), value);
     }
 
     pub fn get(&mut self, name: impl ToString) -> Result<Value, Error> {
         match self.scope.get(&name.to_string()) {
             Some(val) => Ok(*val),
-            None => Err(Error::VariableNotDefined(name.to_string(), self.clone()))
+            None => Err(Error::VariableNotDefined(name.to_string(), self.clone())),
         }
     }
 
@@ -40,7 +43,7 @@ impl Env {
             if !value.is_ref() {
                 value.free();
             } else {
-                println!("NOT FREEING {:#?}", value);
+                add_to_compiled(format!("NOT FREEING {:#?}", value));
             }
         }
     }

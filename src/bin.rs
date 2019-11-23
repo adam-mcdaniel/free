@@ -1,10 +1,10 @@
 extern crate smpl_typchk;
-use smpl_typchk::{Program, compile, compile::*, init, Error, Stdout, Value};
+use smpl_typchk::{compile, compile::*, init, Error, Program, Stdout, Value};
 
 fn main() -> Result<(), Error> {
     init();
 
-    deforfun("print", &["a"], || {
+    deforfun("prn", &["a"], || {
         Stdout::print(get("a")?);
         Ok(())
     });
@@ -15,33 +15,55 @@ fn main() -> Result<(), Error> {
     });
 
     deforfun("add", &["a", "b"], || {
-        get("a")?.plus_eq(get("b")?);
-        set_return(get("a")?);
+        define("c", Eval::Value(get("a")?))?;
+        define("d", Eval::Value(get("b")?))?;
+        get("c")?.plus_eq(get("d")?);
+        set_return(get("c")?)?;
         Ok(())
     });
 
     deforfun("sub", &["a", "b"], || {
-        get("a")?.minus_eq(get("b")?);
-        set_return(get("a")?);
+        define("c", Eval::Value(get("a")?))?;
+        define("d", Eval::Value(get("b")?))?;
+        get("c")?.minus_eq(get("d")?);
+        set_return(get("c")?)?;
         Ok(())
     });
 
     deforfun("alloc", &["size"], || {
-        define("ptr", Eval::Value(Value::variable_alloc(get("size")?)))?;
-        set_return(get("ptr")?);
+        define("ptr", Eval::Value(Value::variable_alloc(get("size")?)?))?;
+        set_return(get("ptr")?)?;
         Ok(())
     });
 
     deforfun("free_byte", &["ptr"], || {
-        get("ptr")?.deref().free();
+        get("ptr")?.deref()?.free();
         Ok(())
     });
 
-    let prog = Program::from(r#"
+    let prog = Program::from(
+        r#"
 
-fn println(value) {
-    print(value);
-    print('\n');
+
+        
+#[enable(brainfuck)]
+
+fn cprn(cstr) {
+    print_cstr(cstr);
+
+    return 0;
+}
+
+fn cprnln(cstr) {
+    cprn(cstr);
+    prn('\n');
+
+    return 0;
+}
+
+fn prnln(str) {
+    prn(str);
+    prn('\n');
 
     return 0;
 }
@@ -62,41 +84,31 @@ fn cstr(s, size) {
     return ptr;
 }
 
-fn cstr1(s, size) {
-    def ptr = alloc(size);
-    *ptr = s;
+fn mul(a, b) {
+    def n = 0;
+    while b {
+        b = sub(b, 1);
+        n = add(n, a);
+    }
 
-    return ptr;
+    return n;
 }
 
-fn cstr2(s, size) {
-    def ptr = alloc(size);
-    *ptr = s;
-
-    return ptr;
-}
-fn cstr3(s, size) {
-    def ptr = alloc(size);
-    *ptr = s;
-
-    return ptr;
+fn beep() {
+    prn(7);    
 }
 
 fn start() {
-    def a = cstr("hello world!", 20);
-
-    print_cstr(a);
-    free(a, 20);
-
     return 0;
 }
 
-"#);
+"#,
+    );
     // println!("{:#?}", prog);
     prog.compile()?;
 
     call("start", &vec![])?;
     println!("{}", compile());
-
+    eprintln!("Done!");
     Ok(())
 }

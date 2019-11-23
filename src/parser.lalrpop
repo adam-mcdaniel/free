@@ -24,7 +24,7 @@ pub Flag: Flag = {
 }
 
 pub FlagName: Flag = {
-    "disable" "(" "ptrs" ")" => Flag::DisablePtrs,
+    "enable" "(" "brainfuck" ")" => Flag::EnableBrainFuck,
     "enable" "(" "size_warn" ")" => Flag::EnableSizeWarn
 }
 
@@ -41,7 +41,8 @@ pub Expr: Expr = {
     <IfStatement> => <>,
     <WhileLoop> => <>,
     <Assign> ";" => <>,
-    <Value> ";" => Expr::Eval(<>)
+    <Value> ";" => Expr::Eval(<>),
+    "return" <ret: Value> ";" => Expr::Return(Return::new(ret))
 }
 
 pub Assign: Expr = {
@@ -76,11 +77,7 @@ pub IfStatement: Expr = {
     }
 }
 
-FunctionDef: UserFn = "fn" <name: Ident> <args: List<"(", Ident, ",", ")">> "{" <body: Body>  "return" <ret: Value> ";" "}" => {
-    let mut v = body;
-    v.push(Expr::Return(Return::new(ret)));
-    UserFn::new(name, args, v)
-};
+FunctionDef: UserFn = "fn" <name: Ident> <args: List<"(", Ident, ",", ")">> "{" <body: Body> "}" => UserFn::new(name, args, body);
 
 
 Literal: Literal = {
