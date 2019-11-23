@@ -1,4 +1,4 @@
-use crate::{Program, Error};
+use crate::{Error, Program, Eval, Literal, Lower};
 use core::fmt;
 use std::sync::Mutex;
 
@@ -37,7 +37,10 @@ pub fn init() {
     f(&TEMP5);
     f(&TEMP6);
 
-    add_to_compiled(format!("STARTING STACK PTR IS {} ", *STACK_PTR.lock().unwrap()));
+    add_to_compiled(format!(
+        "STARTING STACK PTR IS {} ",
+        *STACK_PTR.lock().unwrap()
+    ));
 }
 
 pub fn compile() -> String {
@@ -50,29 +53,56 @@ pub fn compile() -> String {
     TEMP5.free();
     TEMP6.free();
 
-    add_to_compiled(format!("FINAL STACK PTR IS {} ", *STACK_PTR.lock().unwrap()));
+    add_to_compiled(format!(
+        "FINAL STACK PTR IS {} ",
+        *STACK_PTR.lock().unwrap()
+    ));
 
     COMPILED.lock().unwrap().clone()
 }
 
 pub struct Control;
 impl Control {
-    pub fn if_begin(var: Value) {
+    pub fn if_begin(var: Value) -> Result<(), Error> {
         add_to_compiled("\nIF BEGIN\n");
-        TEMP0.zero();
-        CONTROL_REGISTERS.lock().unwrap().push(var);
-        add_to_compiled(var.to() + "[" + &var.from() + "\nCODE BEGIN\n");
+        TEMP5.assign(var)?;
+        TEMP6.assign(Eval::Literal(Literal::byte_int(1)).lower()?)?;
+
+        // CONTROL_REGISTERS.lock().unwrap().push(var);
+
+        Self::while_begin(*TEMP5);
+        add_to_compiled("\nTHEN CODE BEGIN\n");
+        Ok(())
+    }
+
+    pub fn else_begin() -> Result<(), Error> {
+        add_to_compiled("\nTHEN CODE END\n");
+        TEMP5.zero();
+        TEMP6.zero();
+        Self::while_end();
+        Self::while_begin(*TEMP6);
+        add_to_compiled("\nELSE CODE BEGIN\n");
+        // TEMP0.zero();
+        // let var = CONTROL_REGISTERS.lock().unwrap().pop().unwrap();
+        // TEMP1.assign(var)?;
+        // var.zero();
+        // add_to_compiled(var.to() + "]" + &var.from());
+        // var.assign(*TEMP1)?;
+        // TEMP1.zero();
+        Ok(())
     }
 
     pub fn if_end() -> Result<(), Error> {
-        add_to_compiled("\nCODE END\n");
-        TEMP0.zero();
-        let var = CONTROL_REGISTERS.lock().unwrap().pop().unwrap();
-        TEMP1.assign(var)?;
-        var.zero();
-        add_to_compiled(var.to() + "]" + &var.from());
-        var.assign(*TEMP1)?;
-        TEMP1.zero();
+        add_to_compiled("\nELSE CODE END\n");
+        TEMP6.zero();
+        Self::while_end();
+        // TEMP0.zero();
+        // let var = CONTROL_REGISTERS.lock().unwrap().pop().unwrap();
+        // TEMP1.assign(var)?;
+        // var.zero();
+        // add_to_compiled(var.to() + "]" + &var.from());
+        // var.assign(*TEMP1)?;
+        // TEMP1.zero();
         add_to_compiled("\nIF END\n");
         Ok(())
     }
@@ -116,24 +146,24 @@ impl Stdout {
 
     /// This prints a pointer to a value like a CString
     /// This requires brainfuck compatibility mode to be disabled.
-    pub fn print_cstr(var: Value) {
-        if Program::brainfuck_enabled() {
-            Err(Error::CannotUsePointersInBrainFuckMode)
-        } else {
-            Ok(result)
-        }
-
+    pub fn print_cstr(var: Value) -> Result<(), Error> {
         let mut result = String::new();
 
-        /// Dereference value and print string
+        // Dereference value and print string
         result += &var.to();
-        result += "*[.>]&";
-        /// Refer back to home
+        result += "*-[+.>-]+&";
+        // Refer back to home
         result += &var.from();
 
         add_to_compiled("\nPRINT CELL\n");
         add_to_compiled(&result);
         add_to_compiled("\nDONE\n");
+
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -148,6 +178,7 @@ pub struct Value {
     pub number_cells: u32,
 }
 
+/// This is for debugging.
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
@@ -204,7 +235,6 @@ impl Value {
         add_to_compiled("?");
         add_to_compiled(&result.from());
         add_to_compiled("\nDONE\n");
-
 
         if Program::brainfuck_enabled() {
             Err(Error::CannotUsePointersInBrainFuckMode)
@@ -263,12 +293,15 @@ impl Value {
     }
 
     pub fn assign(&self, val: Self) -> Result<(), Error> {
+        if val == *self {
+            return Ok(());
+        }
+
         if Program::brainfuck_enabled() && val.size() > self.size() {
-            return Err(Error::CannotAssignLargerValueToSmallerValueInBrainFuckMode)
+            return Err(Error::CannotAssignLargerValueToSmallerValueInBrainFuckMode);
         } else if Program::size_warn_enabled() && val.size() > self.size() {
             eprintln!("Warning: assigning larger value to smaller value");
         }
-
 
         TEMP0.zero();
 
@@ -312,6 +345,8 @@ impl Value {
         }
         Ok(())
     }
+
+
 
     pub fn plus_eq(&self, val: Self) {
         TEMP0.zero();
@@ -427,12 +462,13 @@ impl Value {
     }
 
     pub fn string(value: impl ToString) -> Self {
-        let result = Self::new(value.to_string().len() as u32);
+        let result = Self::new((value.to_string().len() + 1) as u32);
 
         add_to_compiled(result.to());
         for ch in value.to_string().chars() {
             add_to_compiled("+".repeat(ch as usize) + ">");
         }
+        add_to_compiled("+");
         for _ in value.to_string().chars() {
             add_to_compiled("<");
         }

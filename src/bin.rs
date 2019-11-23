@@ -1,72 +1,51 @@
 extern crate smpl_typchk;
-use smpl_typchk::{compile, compile::*, init, Error, Program, Stdout, Value};
+use smpl_typchk::{Error, Program};
+// use regex::Regex;
+
+
+fn optimize(s: impl ToString) -> String {
+    let mut compiled = s.to_string().chars().filter(|ch| ['>', '<', ',', '.', '[', ']', '+', '-', '*', '?', '&'].contains(ch)).collect::<String>();
+    let original_len = compiled.len();
+
+    while compiled.contains("<<<>>>") || compiled.contains(">>><<<") {
+        compiled = compiled.replace("<<<>>>", "").replace(">>><<<", "");
+    }
+    while compiled.contains("<>") || compiled.contains("><") {
+        compiled = compiled.replace("<>", "").replace("><", "");
+    }
+
+    // let reference = Regex::new(r"[>]+&").unwrap();
+    // compiled = reference.replace_all(&compiled, "&").to_string();
+
+    println!("OPTIMIZED {} INSTRUCTIONS", original_len - compiled.len());
+    compiled
+}
+
 
 fn main() -> Result<(), Error> {
-    init();
-
-    deforfun("prn", &["a"], || {
-        Stdout::print(get("a")?);
-        Ok(())
-    });
-
-    deforfun("print_cstr", &["a"], || {
-        Stdout::print_cstr(get("a")?);
-        Ok(())
-    });
-
-    deforfun("add", &["a", "b"], || {
-        define("c", Eval::Value(get("a")?))?;
-        define("d", Eval::Value(get("b")?))?;
-        get("c")?.plus_eq(get("d")?);
-        set_return(get("c")?)?;
-        Ok(())
-    });
-
-    deforfun("sub", &["a", "b"], || {
-        define("c", Eval::Value(get("a")?))?;
-        define("d", Eval::Value(get("b")?))?;
-        get("c")?.minus_eq(get("d")?);
-        set_return(get("c")?)?;
-        Ok(())
-    });
-
-    deforfun("alloc", &["size"], || {
-        define("ptr", Eval::Value(Value::variable_alloc(get("size")?)?))?;
-        set_return(get("ptr")?)?;
-        Ok(())
-    });
-
-    deforfun("free_byte", &["ptr"], || {
-        get("ptr")?.deref()?.free();
-        Ok(())
-    });
-
     let prog = Program::from(
         r#"
+// #[enable(brainfuck)]
 
+// fn cprn(cstr) {
+//     print_cstr(cstr);
 
-        
-#[enable(brainfuck)]
+//     return 0;
+// }
 
-fn cprn(cstr) {
-    print_cstr(cstr);
+// fn cprnln(cstr) {
+//     cprn(cstr);
+//     prn('\n');
 
-    return 0;
-}
+//     return 0;
+// }
 
-fn cprnln(cstr) {
-    cprn(cstr);
-    prn('\n');
+// fn prnln(str) {
+//     prn(str);
+//     prn('\n');
 
-    return 0;
-}
-
-fn prnln(str) {
-    prn(str);
-    prn('\n');
-
-    return 0;
-}
+//     return 0;
+// }
 
 fn free(ptr, size) {
     while size {
@@ -77,38 +56,85 @@ fn free(ptr, size) {
     return 0;
 }
 
-fn cstr(s, size) {
-    def ptr = alloc(size);
-    *ptr = s;
+// fn cstr(s, size) {
+//     def ptr = alloc(size);
+//     *ptr = s;
 
-    return ptr;
-}
+//     return ptr;
+// }
 
-fn mul(a, b) {
-    def n = 0;
-    while b {
-        b = sub(b, 1);
-        n = add(n, a);
+// fn mul(a, b) {
+//     def n = 0;
+//     while b {
+//         b = sub(b, 1);
+//         n = add(n, a);
+//     }
+
+//     return n;
+// }
+
+// fn beep() {
+//     prn(7);    
+// }
+
+fn cstr(s, len) {
+    def a = alloc(len);
+    *a = s;
+
+    def counter = sub(len, 1);
+    while counter {
+        def ch = *add(a, counter);
+        if ch {}
+        else {
+            *add(a, counter) = 1;
+        }
+        counter = sub(counter, 1);
     }
 
-    return n;
+    return a;
 }
 
-fn beep() {
-    prn(7);    
+    
+fn not(a) {
+    if a { return 0; }
+    else { return 1; }
+}
+
+fn digit(n) {
+    return add(n, 48);
+}
+
+fn fib(n) {
+    def a = 0;
+    def b = 1;
+    def c = 1;
+
+    while n {
+        c = a;
+        println(digit(a));
+        a = b;
+        b = add(b, c);
+        n = sub(n, 1);
+    }
+
+    return 0;
 }
 
 fn start() {
+    // fib(7);
+    
+
+    def a = "testing";
+    cprintln(&a);
+    cprintln(cstr("wow", 3));
+
     return 0;
 }
 
 "#,
     );
     // println!("{:#?}", prog);
-    prog.compile()?;
-
-    call("start", &vec![])?;
-    println!("{}", compile());
-    eprintln!("Done!");
+    println!("{}", optimize(prog.compile()?));
+    // println!("{}", prog.compile()?);
     Ok(())
 }

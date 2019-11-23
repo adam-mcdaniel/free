@@ -1,33 +1,39 @@
-use crate::{Control, Env, ProgramParser, Value, RETURN, STACK_PTR, add_to_compiled};
+use crate::{
+    add_to_compiled, compile, init, Control, Env, ProgramParser, Stdout, Value, RETURN, STACK_PTR,
+};
 use comment::rust::strip;
-use rand::prelude::*;
-use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 
-
 lazy_static! {
+    /// This is used to manage variable definitions within scopes.
+    /// When a function is called, a scope is pushed on the scope stack,
+    /// and all new definitions are contained in the new scope.
+    /// When the function call finishes, the scope is popped and freed.
     pub static ref SCOPE_STACK: Mutex<Vec<Env>> = Mutex::new(vec![Env::new()]);
+
+    /// If the user enables brainfuck compatibility mode, this flag is set
     static ref ENABLE_BRAINFUCK: Mutex<bool> = Mutex::new(false);
+    /// If the user enables size warnings, this flag is set
     static ref ENABLE_SIZE_WARN: Mutex<bool> = Mutex::new(false);
+    /// This hashmap contains all the user defined functions for the program
     static ref FN_DEFS: Mutex<HashMap<String, UserFn>> = Mutex::new(HashMap::new());
+    /// This hashmap contains all the compiler defined functions for the program
     static ref FOREIGN_FN_DEFS: Mutex<HashMap<String, ForeignFn>> = Mutex::new(HashMap::new());
 }
 
+/// Generate a random string, used for naming temporary variables
 fn rand_str() -> String {
-    thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(10)
-        .collect()
-} 
+    thread_rng().sample_iter(&Alphanumeric).take(30).collect()
+}
 
-
+/// This object manages compiling the program, and setting the enabled flags.
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct Program(Vec<Flag>, Vec<UserFn>);
-
 
 impl<T: ToString> From<T> for Program {
     fn from(t: T) -> Self {
@@ -39,41 +45,118 @@ impl<T: ToString> From<T> for Program {
 }
 
 impl Program {
+    /// Create new Program object
     pub fn new(flags: Vec<Flag>, funs: Vec<UserFn>) -> Self {
+        // Set the flags for the compiler
         for flag in &flags {
             match flag {
                 Flag::EnableBrainFuck => *ENABLE_BRAINFUCK.lock().unwrap() = true,
-                Flag::EnableSizeWarn => *ENABLE_SIZE_WARN.lock().unwrap() = true
+                Flag::EnableSizeWarn => *ENABLE_SIZE_WARN.lock().unwrap() = true,
             }
         }
+        // Return self
         Self(flags, funs)
     }
 
+    /// Instantiate compiler functions
+    fn prelude() {
+        init();
+
+        // Add lhs and rhs
+        deforfun("add", &["a", "b"], || {
+            get("a")?.plus_eq(get("b")?);
+            set_return(get("a")?)?;
+            Ok(())
+        });
+
+        // Subtract rhs from lhs
+        deforfun("sub", &["a", "b"], || {
+            get("a")?.minus_eq(get("b")?);
+            set_return(get("a")?)?;
+            Ok(())
+        });
+        
+        // Print function
+        deforfun("print", &["a"], || {
+            Stdout::print(get("a")?);
+            Ok(())
+        });
+
+        // Println function
+        deforfun("println", &["a"], || {
+            Stdout::print(get("a")?);
+            Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
+            Ok(())
+        });
+        
+        // Print function
+        deforfun("cprint", &["a"], || {
+            Stdout::print_cstr(get("a")?)?;
+            Ok(())
+        });
+
+        // Println function
+        deforfun("cprintln", &["a"], || {
+            Stdout::print_cstr(get("a")?)?;
+            Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
+            Ok(())
+        });
+
+        // Allocate `size` number of bytes
+        deforfun("alloc", &["size"], || {
+            define("ptr", Eval::Value(Value::variable_alloc(get("size")?)?))?;
+            set_return(get("ptr")?)?;
+            Ok(())
+        });
+
+        // Free a byte at ptr
+        deforfun("free_byte", &["ptr"], || {
+            get("ptr")?.deref()?.free();
+            Ok(())
+        });
+    }
+
+    /// Is brainfuck compatibility mode enabled?
     pub fn brainfuck_enabled() -> bool {
         *ENABLE_BRAINFUCK.lock().unwrap()
     }
 
+    /// Are size warnings enabled?
     pub fn size_warn_enabled() -> bool {
         *ENABLE_SIZE_WARN.lock().unwrap()
     }
 
-    pub fn compile(self) -> Result<(), Error> {
-        let Program(_flags, funs) = self;
+    /// Compile the code
+    pub fn compile(self) -> Result<String, Error> {
+        // Add the compiler functions
+        Self::prelude();
+
+        // Get function definitions
+        let Program(_, funs) = self;
+        
+        // Compile
         for fun in funs {
             fun.compile();
         }
-        Ok(())
+        call("start", &vec![])?;
+
+        // Return compiled code
+        Ok(compile())
     }
 }
 
+
+/// The possible flags to be returned by the parser
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Flag {
     EnableBrainFuck,
     EnableSizeWarn,
 }
 
+/// The possible compiler errors
 #[derive(Clone, Debug)]
 pub enum Error {
+    MustReturnSingleByte,
     CannotReferenceAReference,
     CannotUsePointersInBrainFuckMode,
     CannotUse4ByteUnsignedIntsInBrainFuckMode,
@@ -82,34 +165,50 @@ pub enum Error {
     VariableNotDefined(String, Env),
 }
 
+/// This trait describes objects that are lowered
+/// into values rather than expressions, such as function calls
+/// literals, variables, etc..
 pub trait Lower {
     fn lower(&self) -> Result<Value, Error>;
 }
 
+/// A value can be `lowered` into a value
 impl Lower for Value {
     fn lower(&self) -> Result<Value, Error> {
         Ok(*self)
     }
 }
 
+/// This trait is for objects that compile into expressions
+/// rather than values. This is applicable for definitions,
+/// assignments, return expressions, while loops, etc..
 pub trait Compile {
     fn compile(&self) -> Result<(), Error>;
 }
 
+/// This function creates a new scope on the scope stack.
+/// THIS IS ONLY TO BE USED BY FUNCTION DEFINITIONS
 fn push_scope(env: Env) {
     SCOPE_STACK.lock().unwrap().push(env);
 }
 
+/// This function destroys a scope on the scope stack.
+/// THIS IS ONLY TO BE USED BY FUNCTION DEFINITIONS
 fn pop_scope() -> Env {
     SCOPE_STACK.lock().unwrap().pop().unwrap()
 }
 
+/// This sets the RETURN value object to a specific value
 pub fn set_return(val: Value) -> Result<(), Error> {
-    RETURN.zero();
-    RETURN.assign(val)?;
-    Ok(())
+    if val.size() > 1 {
+        Err(Error::MustReturnSingleByte)
+    } else {
+        RETURN.assign(val)?;
+        Ok(())
+    }
 }
 
+/// This retreives the last value returned by a function
 pub fn get_return() -> Result<Value, Error> {
     // let val = Eval::Value(*RETURN);
     // let name = format!("%TEMP_RETURN{}%", *STACK_PTR.lock().unwrap());
@@ -118,6 +217,11 @@ pub fn get_return() -> Result<Value, Error> {
     Ok(*RETURN)
 }
 
+
+/// This represents a value that can be evaluated. Variables,
+/// literals, function calls, value dereferences, variable references,
+/// and values (this is a cheat for letting the compiler easily use
+/// values in place of long Evals) can all be evaluated into a Value
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Eval {
     Load(Load),
@@ -128,8 +232,10 @@ pub enum Eval {
     Value(Value),
 }
 
+/// An Eval expression is evaluated by the expression it contains
 impl Lower for Eval {
     fn lower(&self) -> Result<Value, Error> {
+        // Lower the contained expression
         match self {
             Self::Load(l) => l.lower(),
             Self::Literal(l) => l.lower(),
@@ -141,6 +247,8 @@ impl Lower for Eval {
     }
 }
 
+/// This represents a statement as opposed to a value.
+/// A value can also be a statement, though.
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Expr {
     If(If),
@@ -148,15 +256,16 @@ pub enum Expr {
     Eval(Eval),
     Define(Define),
     Assign(Assign),
-    Return(Return),
+    Return(Return)
 }
 
+/// An Expression is evaluated by the expression it contains
 impl Compile for Expr {
     fn compile(&self) -> Result<(), Error> {
         match self {
             Self::If(l) => l.compile()?,
             Self::Eval(e) => {
-                e.lower()?;
+                e.lower()?; // Dont return value from lower
             }
             Self::Define(def) => def.compile()?,
             Self::Assign(a) => a.compile()?,
@@ -167,6 +276,7 @@ impl Compile for Expr {
     }
 }
 
+/// This sets the RETURN register to an Eval
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct Return(Eval);
 
@@ -360,7 +470,7 @@ impl UserFn {
         }
 
         pop_scope().free();
-        *STACK_PTR.lock().unwrap() = stack_frame;// + RETURN.size();
+        *STACK_PTR.lock().unwrap() = stack_frame; // + RETURN.size();
 
         Ok(())
     }
@@ -469,19 +579,21 @@ impl Compile for Assign {
 pub struct If(Eval, Vec<Expr>, Vec<Expr>);
 
 impl If {
-    pub fn new(condition: Eval, then: Vec<Expr>, _otherwise: Vec<Expr>) -> Self {
-        Self(condition, then, _otherwise)
+    pub fn new(condition: Eval, then: Vec<Expr>, otherwise: Vec<Expr>) -> Self {
+        Self(condition, then, otherwise)
     }
 }
 
 impl Compile for If {
     fn compile(&self) -> Result<(), Error> {
-        let If(condition, then, _otherwise) = self;
-        Control::if_begin(condition.lower()?);
-        {
-            for exp in then {
-                exp.compile()?;
-            }
+        let If(condition, then, otherwise) = self;
+        Control::if_begin(condition.lower()?)?;
+        for exp in then {
+            exp.compile()?;
+        }
+        Control::else_begin()?;
+        for exp in otherwise {
+            exp.compile()?;
         }
         Control::if_end()?;
         Ok(())

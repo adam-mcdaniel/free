@@ -1,4 +1,4 @@
-use crate::{Error, Value, add_to_compiled};
+use crate::{add_to_compiled, Error, Value};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ impl Env {
         if let Ok(previous_value) = self.get(name.to_string()) {
             previous_value.free();
         }
-        
+
         self.scope.insert(name.to_string(), value.copy()?);
         Ok(())
     }
@@ -26,7 +26,7 @@ impl Env {
         if let Ok(previous_value) = self.get(name.to_string()) {
             previous_value.free();
         }
-        
+
         self.scope.insert(name.to_string(), value);
     }
 
