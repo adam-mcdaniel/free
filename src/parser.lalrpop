@@ -1,0 +1,109 @@
+use crate::compile::*;
+
+grammar;
+
+
+extern {
+    type Location = usize;
+    type Error = String;
+}
+
+
+pub Str: String = <s:r#""(\\.|[^"])*""#> => String::from(&s[1..s.len()-1]).replace("\\n","\n").replace("\\r","\r").replace("\\t","\t").replace("\\0","\0");
+pub Char: char = <s:r#"'(\\.|[^"])'"#> => String::from(&s[1..s.len()-1]).replace("\\n","\n").replace("\\r","\r").replace("\\t","\t").replace("\\0","\0").chars().next().unwrap();
+
+pub Num: Literal = {
+    r"([0-9]+([.][0-9]*)?|[.][0-9]+)" => match <>.parse::<u8>() {
+        Ok(val) => Literal::byte_int(val),
+        Err(_) => Literal::unsigned_4byte_int(<>.parse::<u32>().unwrap()),
+    },
+}
+
+pub Flag: Flag = {
+    "#" "[" <FlagName> "]" => <>
+}
+
+pub FlagName: Flag = {
+    "disable" "(" "ptrs" ")" => Flag::DisablePtrs,
+    "enable" "(" "size_warn" ")" => Flag::EnableSizeWarn
+}
+
+pub Value: Eval = {
+    "(" <Value> ")" => <>,
+    "*" <name: Value> => Eval::Deref(Deref::new(name)),
+    <name: Ident> => Eval::Load(Load::new(name)),
+    "&" <name: Ident> => Eval::Refer(Refer::new(Eval::Load(Load::new(name)))),
+    <name: Ident> <args: List<"(", Value, ",", ")">> => Eval::Call(Call::new(name, args)),
+    <Literal> => Eval::Literal(<>)
+}
+
+pub Expr: Expr = {
+    <IfStatement> => <>,
+    <WhileLoop> => <>,
+    <Assign> ";" => <>,
+    <Value> ";" => Expr::Eval(<>)
+}
+
+pub Assign: Expr = {
+    <lhs: Value> "=" <rhs: Value> => Expr::Assign(Assign::new(lhs, rhs)),
+    "def" <lhs: Ident> "=" <rhs: Value> => Expr::Define(Define::new(lhs, rhs)),
+}
+
+pub Program: Program = {
+    <flags: Flag*> <fndefs: FunctionDef+> => Program::new(flags, fndefs)
+}
+
+pub Body: Vec<Expr> = Expr* => <>;
+
+pub Ident: String = {
+    r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string()
+}
+
+pub WhileLoop: Expr = {
+    "while" <condition:Ident> "{" <body:Body> "}" => Expr::While(While::new(Eval::Load(Load::new(condition)), body))
+}
+
+pub IfStatement: Expr = {
+    "if" <condition:Ident> "{" <then_body:Body> "}" <else_clause:("else" "{" <Body> "}")?> => {
+        match else_clause {
+            Some(clause) => {
+                Expr::If(If::new(Eval::Load(Load::new(condition)), then_body, clause))
+            }
+            None => {
+                Expr::If(If::new(Eval::Load(Load::new(condition)), then_body, vec![]))
+            }
+        }
+    }
+}
+
+FunctionDef: UserFn = "fn" <name: Ident> <args: List<"(", Ident, ",", ")">> "{" <body: Body>  "return" <ret: Value> ";" "}" => {
+    let mut v = body;
+    v.push(Expr::Return(Return::new(ret)));
+    UserFn::new(name, args, v)
+};
+
+
+Literal: Literal = {
+    <Str> => Literal::string(<>),
+    <Char> => Literal::character(<>),
+    <Num> => <>
+}
+
+Infix<First, Operator, Second>: (First, Operator, Second) = {
+    <first:First> <op: Operator> <second:Second> => {
+        (<>)
+    }
+}
+
+List<Begin, T, Sep, End>: Vec<T> = {
+    <first:Begin> <list: (<T> <Sep>)*> <end:T?> <last:End> => {
+        match end {
+            None => list.iter().map(|(v, s)| v.clone()).collect(),
+            Some(val) => {
+                let mut list: Vec<_> = list.iter().map(|(v, s)| v.clone()).collect();
+                list.push(val);
+                list
+            }
+        }
+    }
+}

@@ -17,15 +17,15 @@ pub fn init() {
 }
 
 pub fn compile() -> String {
+    RETURN.free();
+    TEMP0.free();
+    TEMP1.free();
+    TEMP2.free();
+    TEMP3.free();
+    TEMP4.free();
+    TEMP5.free();
+    TEMP6.free();
     unsafe {
-        RETURN.free();
-        TEMP0.free();
-        TEMP1.free();
-        TEMP2.free();
-        TEMP3.free();
-        TEMP4.free();
-        TEMP5.free();
-        TEMP6.free();
         COMPILED += &format!("\nFINAL STACK PTR POS: {}", STACK_PTR);
         return COMPILED.clone();
     }
@@ -55,6 +55,24 @@ impl Control {
             var.assign(*TEMP1);
             TEMP1.zero();
             COMPILED += "\nIF END\n";
+        }
+    }
+
+    pub fn while_begin(var: Value) {
+        unsafe {
+            COMPILED += "\nWHILE BEGIN\n";
+            CONTROL_REGISTERS.push(var);
+            COMPILED += &(var.to() + "[" + &var.from());
+            COMPILED += "\nCODE BEGIN\n";
+        }
+    }
+
+    pub fn while_end() {
+        unsafe {
+            COMPILED += "\nCODE END\n";
+            let var = CONTROL_REGISTERS.pop().unwrap();
+            COMPILED += &(var.to() + "]" + &var.from());
+            COMPILED += "\nWHILE END\n";
         }
     }
 }
@@ -113,19 +131,11 @@ pub static mut STACK_PTR: u32 = 0;
 
 // a = alloc(8);
 // stdout.print(*a);
-#[derive(Copy, PartialEq, Eq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Value {
     pub offset: u32,
     pub reference_depth: u32,
     pub number_cells: u32,
-}
-
-impl Clone for Value {
-    fn clone(&self) -> Self {
-        let val = Value::new(self.number_cells);
-        val.assign(*self);
-        val
-    }
 }
 
 impl fmt::Debug for Value {
@@ -186,6 +196,12 @@ impl Value {
         result
     }
 
+    pub fn copy(&self) -> Self {
+        let val = Value::new(self.number_cells);
+        val.assign(*self);
+        val
+    }
+
     pub fn is_ref(&self) -> bool {
         self.reference_depth > 0
     }
@@ -216,6 +232,7 @@ impl Value {
             }
 
             COMPILED += &self.from();
+
             COMPILED += "\nDONE\n";
         }
     }
@@ -350,6 +367,26 @@ impl Value {
         }
     }
 
+    pub fn byte_int(value: u8) -> Self {
+        let result = Self::new(1);
+        unsafe {
+            COMPILED += &result.to();
+            COMPILED += &"+".repeat(value as usize);
+            COMPILED += &result.from();
+        }
+        result
+    }
+
+    pub fn unsigned_4byte_int(value: u32) -> Self {
+        let result = Self::new(1);
+        unsafe {
+            COMPILED += &result.to();
+            COMPILED += &"+".repeat(value as usize);
+            COMPILED += &result.from();
+        }
+        result
+    }
+
     pub fn character(value: char) -> Self {
         let result = Self::new(1);
         unsafe {
@@ -357,7 +394,7 @@ impl Value {
             COMPILED += &"+".repeat(value as usize);
             COMPILED += &result.from();
         }
-        return result;
+        result
     }
 
     pub fn string(value: impl ToString) -> Self {
@@ -374,7 +411,7 @@ impl Value {
             COMPILED += &result.from();
         }
 
-        return result;
+        result
     }
 
     pub fn to(&self) -> String {
@@ -391,28 +428,23 @@ impl Value {
 
     pub fn deref(&self) -> Self {
         let mut result = Self::new(1);
+        // result.number_cells = self.size();
 
         result.reference_depth = self.reference_depth + 1;
-        result.number_cells = self.size();
         result.offset = self.offset;
 
         result
     }
 
     pub fn refer(&self) -> Result<Self, Error> {
-        if self.reference_depth > 0 {
-            let mut result = Self::new(1);
-            result.number_cells = self.size();
-
-            unsafe {
-                COMPILED += &result.to();
-                COMPILED += &"+".repeat(self.offset as usize);
-                COMPILED += &result.from();
-            }
-
-            Ok(result)
-        } else {
-            Err(Error::CannotReferenceAReference)
+        let result = Self::new(1);
+        
+        unsafe {
+            COMPILED += &result.to();
+            COMPILED += &"+".repeat(self.offset as usize);
+            COMPILED += &result.from();
         }
+
+        Ok(result)
     }
 }

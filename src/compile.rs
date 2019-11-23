@@ -1,12 +1,48 @@
-use crate::{Control, Env, Value, RETURN, STACK_PTR};
+use comment::rust::strip;
+use crate::{Control, Env, Value, RETURN, STACK_PTR, ProgramParser};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 
-#[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Program(Vec<Flag>, Vec<UserFn>);
+
+impl<T: ToString> From<T> for Program {
+    fn from(t: T) -> Self {
+        match ProgramParser::new().parse(&strip(t.to_string()).unwrap()) {
+            Ok(val) => val,
+            Err(e) => panic!("{:#?}", e)
+        }
+    }
+}
+
+impl Program {
+    pub fn new(flags: Vec<Flag>, funs: Vec<UserFn>) -> Self {
+        Self(flags, funs)
+    }
+
+    pub fn compile(self) -> Result<(), Error> {
+        let Program(_flags, funs) = self;
+        for fun in funs {
+            fun.compile();
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub enum Flag {
+    DisablePtrs,
+    EnableSizeWarn
+}
+
+#[derive(Clone, Debug)]
 pub enum Error {
     CannotReferenceAReference,
+    FunctionNotDefined(String),
+    VariableNotDefined(String, Env)
 }
 
 pub trait Lower {
@@ -38,19 +74,28 @@ fn pop_scope() -> Env {
 }
 
 pub fn set_return(val: Value) {
+    RETURN.zero();
     RETURN.assign(val);
+    // RETURN.assign(val.copy());
 }
 
 pub fn get_return() -> Result<Value, Error> {
-    define("%TEMP_RETURN%", Box::new(*RETURN))?;
-    get("%TEMP_RETURN%")
+    unsafe {
+        let val = Eval::Value(*RETURN);
+        let name = format!("%TEMP_RETURN{}%", STACK_PTR);
+        define(&name, val)?;
+        get(name)
+    }
 }
 
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Eval {
     Load(Load),
     Literal(Literal),
     Call(Call),
     Deref(Deref),
+    Refer(Refer),
+    Value(Value)
 }
 
 impl Lower for Eval {
@@ -60,12 +105,16 @@ impl Lower for Eval {
             Self::Literal(l) => l.lower(),
             Self::Deref(r) => r.lower(),
             Self::Call(c) => c.lower(),
+            Self::Refer(v) => v.lower(),
+            Self::Value(v) => v.lower(),
         }
     }
 }
 
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Expr {
     If(If),
+    While(While),
     Eval(Eval),
     Define(Define),
     Assign(Assign),
@@ -79,13 +128,21 @@ impl Compile for Expr {
             Self::Eval(e) => { e.lower()?; },
             Self::Define(def) => def.compile()?,
             Self::Assign(a) => a.compile()?,
+            Self::While(w) => w.compile()?,
             Self::Return(r) => r.compile()?,
         }
         Ok(())
     }
 }
 
-pub struct Return(Box<dyn Lower>);
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Return(Eval);
+
+impl Return {
+    pub fn new(val: Eval) -> Self {
+        Return(val)
+    }
+}
 
 impl Compile for Return {
     fn compile(&self) -> Result<(), Error> {
@@ -95,10 +152,11 @@ impl Compile for Return {
     }
 }
 
-pub struct Call(String, Vec<Box<dyn Lower>>);
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Call(String, Vec<Eval>);
 
 impl Call {
-    pub fn new(name: impl ToString, args: Vec<Box<dyn Lower>>) -> Self {
+    pub fn new(name: impl ToString, args: Vec<Eval>) -> Self {
         Self(name.to_string(), args)
     }
 }
@@ -113,11 +171,12 @@ impl Lower for Call {
     }
 }
 
-pub struct Deref(Box<dyn Lower>);
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Deref(Arc<Eval>);
 
 impl Deref {
-    pub fn new(refer: Box<dyn Lower>) -> Self {
-        Self(refer)
+    pub fn new(refer: Eval) -> Self {
+        Self(Arc::new(refer))
     }
 }
 
@@ -128,6 +187,23 @@ impl Lower for Deref {
     }
 }
 
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Refer(Arc<Eval>);
+
+impl Refer {
+    pub fn new(var: Eval) -> Self {
+        Self(Arc::new(var))
+    }
+}
+
+impl Lower for Refer {
+    fn lower(&self) -> Result<Value, Error> {
+        let Refer(var) = self;
+        Ok(var.lower()?.refer()?)
+    }
+}
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct Load(String);
 
 impl Load {
@@ -143,9 +219,12 @@ impl Lower for Load {
     }
 }
 
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Literal {
     String(String),
     Character(char),
+    ByteInt(u8),
+    Unsigned4ByteInt(u32)
 }
 
 impl Literal {
@@ -156,6 +235,14 @@ impl Literal {
     pub fn character(ch: char) -> Self {
         Self::Character(ch)
     }
+
+    pub fn byte_int(b: u8) -> Self {
+        Self::ByteInt(b)
+    }
+
+    pub fn unsigned_4byte_int(ui: u32) -> Self {
+        Self::Unsigned4ByteInt(ui)
+    }
 }
 
 impl Lower for Literal {
@@ -164,11 +251,19 @@ impl Lower for Literal {
         match self {
             Self::String(s) => {
                 unsafe { name = format!("%TEMP_STR_LITERAL{}%", STACK_PTR) }
-                define(&name, Box::new(Value::string(s))).unwrap();
+                define_no_cp(&name, Eval::Value(Value::string(s))).unwrap();
             }
             Self::Character(ch) => {
                 unsafe { name = format!("%TEMP_CHAR_LITERAL{}%", STACK_PTR) }
-                define(&name, Box::new(Value::character(*ch))).unwrap();
+                define_no_cp(&name, Eval::Value(Value::character(*ch))).unwrap();
+            }
+            Self::ByteInt(byte) => {
+                unsafe { name = format!("%TEMP_BYTE_LITERAL{}%", STACK_PTR) }
+                define_no_cp(&name, Eval::Value(Value::byte_int(*byte))).unwrap();
+            }
+            Self::Unsigned4ByteInt(ui) => {
+                unsafe { name = format!("%TEMP_U32_LITERAL{}%", STACK_PTR) }
+                define_no_cp(&name, Eval::Value(Value::unsigned_4byte_int(*ui))).unwrap();
             }
         }
         get(name)
@@ -182,29 +277,32 @@ pub fn deforfun(name: impl ToString, args: &[&'static str], fun: fn() -> Result<
         .insert(name.to_string(), ForeignFn::new(args.to_vec(), fun));
 }
 
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct UserFn {
+    name: String,
     parameters: Vec<String>,
-    body: Vec<Box<dyn Compile>>,
+    body: Vec<Expr>,
 }
 
-unsafe impl Send for UserFn {}
 
 impl UserFn {
-    pub fn new(parameters: Vec<String>, body: Vec<Box<dyn Compile>>) -> Self {
+    pub fn new(name: impl ToString, parameters: Vec<String>, body: Vec<Expr>) -> Self {
         Self {
+            name: name.to_string(),
             parameters: parameters.iter().map(ToString::to_string).collect(),
             body,
         }
     }
 
-    pub fn define(name: impl ToString, args: Vec<String>, body: Vec<Box<dyn Compile>>) {
+    pub fn compile(self) {
         FN_DEFS.lock().unwrap().insert(
-            name.to_string(),
-            Self::new(args.iter().map(ToString::to_string).collect(), body),
+            self.name.clone(),
+            self
         );
     }
 
-    pub fn call(&self, args: &Vec<Box<dyn Lower>>) -> Result<(), Error> {
+    pub fn call(&self, args: &Vec<Eval>) -> Result<(), Error> {
         let stack_frame;
         unsafe {
             stack_frame = STACK_PTR;
@@ -213,7 +311,7 @@ impl UserFn {
         let mut env = Env::new();
 
         for (i, p) in self.parameters.iter().enumerate() {
-            env.define(p.to_string(), args[i].lower()?.clone());
+            env.define(p.to_string(), args[i].lower()?);//.copy());
         }
 
         push_scope(env);
@@ -224,14 +322,14 @@ impl UserFn {
 
         unsafe {
             pop_scope().free();
-            STACK_PTR = stack_frame;
+            STACK_PTR = stack_frame + RETURN.size();
         }
 
         Ok(())
     }
 }
 
-pub fn call(name: impl ToString, args: &Vec<Box<dyn Lower>>) -> Result<(), Error> {
+pub fn call(name: impl ToString, args: &Vec<Eval>) -> Result<(), Error> {
     let table = FN_DEFS.lock().unwrap();
     if let Some(f_ref) = table.get(&name.to_string()) {
         let fun = f_ref as *const UserFn;
@@ -256,25 +354,54 @@ pub fn call(name: impl ToString, args: &Vec<Box<dyn Lower>>) -> Result<(), Error
         drop(table)
     }
 
+    Err(Error::FunctionNotDefined(name.to_string()))
+}
+
+pub fn define(name: impl ToString, val: Eval) -> Result<(), Error> {
+    Define::new("%TEMP_DEFINE%", val).compile()?;
+    Define::new(name, Eval::Load(Load::new("%TEMP_DEFINE%"))).compile()?;
     Ok(())
 }
 
-pub fn define(name: impl ToString, val: Box<dyn Lower>) -> Result<(), Error> {
-    Define::new("%TEMP_DEFINE%", Box::new(val.lower()?)).compile()?;
-    Define::new(name, Box::new(get("%TEMP_DEFINE%")?)).compile()?;
+pub fn define_no_cp(final_name: impl ToString, value: Eval) -> Result<(), Error> {
+    // Define::new("%TEMP_DEFINE%", val).compile()?;
+    // Define::new(name, Eval::Load(Load::new("%TEMP_DEFINE%"))).compile()?;
+    // Ok(())
+    let name = "%TEMP_DEFINE%";
+
+    let mut scope_stack = SCOPE_STACK.lock().unwrap();
+    let scope = scope_stack.last_mut().unwrap() as *mut Env;
+    drop(scope_stack);
+    let val = value.lower()?;
+    unsafe {
+        (*scope).define_no_cp(&name, val);
+    }
+
+    
+    let mut scope_stack = SCOPE_STACK.lock().unwrap();
+    let scope = scope_stack.last_mut().unwrap() as *mut Env;
+    drop(scope_stack);
+    unsafe {
+        (*scope).define_no_cp(final_name, get(name)?);
+    }
+
+
+
     Ok(())
 }
 
 pub fn get(name: impl ToString) -> Result<Value, Error> {
     let mut scope_stack = SCOPE_STACK.lock().unwrap();
     let scope = scope_stack.last_mut().unwrap();
-    Ok(scope.get(name.to_string()))
+    scope.get(name.to_string())
 }
 
-pub struct Define(String, Box<dyn Lower>);
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Define(String, Eval);
 
 impl Define {
-    pub fn new(var: impl ToString, value: Box<dyn Lower>) -> Self {
+    pub fn new(var: impl ToString, value: Eval) -> Self {
         Self(var.to_string(), value)
     }
 }
@@ -297,7 +424,14 @@ impl Compile for Define {
     }
 }
 
-pub struct Assign(Box<dyn Lower>, Box<dyn Lower>);
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct Assign(Eval, Eval);
+
+impl Assign {
+    pub fn new(lhs: Eval, rhs: Eval) -> Self {
+        Self(lhs, rhs)
+    }
+}
 
 impl Compile for Assign {
     fn compile(&self) -> Result<(), Error> {
@@ -307,10 +441,12 @@ impl Compile for Assign {
     }
 }
 
-pub struct If(Box<dyn Lower>, Vec<Expr>, Vec<Expr>);
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct If(Eval, Vec<Expr>, Vec<Expr>);
 
 impl If {
-    pub fn new(condition: Box<dyn Lower>, then: Vec<Expr>, _otherwise: Vec<Expr>) -> Self {
+    pub fn new(condition: Eval, then: Vec<Expr>, _otherwise: Vec<Expr>) -> Self {
         Self(condition, then, _otherwise)
     }
 }
@@ -325,6 +461,29 @@ impl Compile for If {
             }
         }
         Control::if_end();
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct While(Eval, Vec<Expr>);
+
+impl While {
+    pub fn new(condition: Eval, then: Vec<Expr>) -> Self {
+        Self(condition, then)
+    }
+}
+
+impl Compile for While {
+    fn compile(&self) -> Result<(), Error> {
+        let While(condition, then) = self;
+        Control::while_begin(condition.lower()?);
+        {
+            for exp in then {
+                exp.compile()?;
+            }
+        }
+        Control::while_end();
         Ok(())
     }
 }
@@ -351,7 +510,7 @@ impl ForeignFn {
         );
     }
 
-    pub fn call(&self, args: &Vec<Box<dyn Lower>>) -> Result<(), Error> {
+    pub fn call(&self, args: &Vec<Eval>) -> Result<(), Error> {
         let stack_frame;
         unsafe {
             stack_frame = STACK_PTR;
@@ -360,7 +519,7 @@ impl ForeignFn {
         let mut env = Env::new();
 
         for (i, p) in self.parameters.iter().enumerate() {
-            env.define(p.to_string(), args[i].lower()?.clone());
+            env.define(p.to_string(), args[i].lower()?);//.copy());
         }
 
         push_scope(env);
@@ -370,7 +529,7 @@ impl ForeignFn {
         // pop_scope();
         unsafe {
             pop_scope().free();
-            STACK_PTR = stack_frame;
+            STACK_PTR = stack_frame + RETURN.size();
         }
 
         Ok(())

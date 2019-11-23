@@ -1,12 +1,16 @@
 extern crate smpl_typchk;
-use smpl_typchk::{compile, compile::*, init, ir::*, Error, Stdout, Value, SCOPE_STACK};
+use smpl_typchk::{Program, compile, compile::*, init, Error, Stdout, Value};
 
 fn main() -> Result<(), Error> {
     init();
 
     deforfun("print", &["a"], || {
         Stdout::print(get("a")?);
-        Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
+        Ok(())
+    });
+
+    deforfun("print_cstr", &["a"], || {
+        Stdout::print_cstr(get("a")?);
         Ok(())
     });
 
@@ -16,55 +20,81 @@ fn main() -> Result<(), Error> {
         Ok(())
     });
 
-    UserFn::define(
-        "test",
-        vec![],
-        vec![
-            Box::new(Expr::Define(Define::new(
-                "a",
-                Box::new(Eval::Literal(Literal::character(65 as char))),
-            ))),
-            Box::new(Expr::Define(Define::new(
-                "b",
-                Box::new(Eval::Literal(Literal::character(1 as char))),
-            ))),
-            Box::new(Expr::Eval(Eval::Call(Call::new(
-                String::from("print"),
-                vec![Box::new(Eval::Call(Call::new(
-                    String::from("add"),
-                    vec![
-                        Box::new(Eval::Load(Load::new("a"))),
-                        Box::new(Eval::Load(Load::new("b")))
-                    ],
-                )))],
-            )))),
-            Box::new(Expr::Eval(Eval::Call(Call::new(
-                String::from("print"),
-                vec![Box::new(Eval::Load(Load::new("a")))]
-            ))))
-        ],
-    );
+    deforfun("sub", &["a", "b"], || {
+        get("a")?.minus_eq(get("b")?);
+        set_return(get("a")?);
+        Ok(())
+    });
 
-    UserFn::define(
-        "start",
-        vec![],
-        vec![
-            Box::new(Expr::Eval(Eval::Call(Call::new(
-                String::from("test"),
-                vec![],
-            )))),
-        ],
-    );
-    // Box::new(Expr::Define(Define::new(
-    //     "a",
-    //     Box::new(Eval::Literal(Literal::string("Hello world!"))),
-    // ))).compile()?;
-    // Box::new(Expr::Eval(Eval::Call(Call::new(
-    //     String::from("print"),
-    //     vec![Box::new(Eval::Load(Load::new(String::from("a"))))],
-    // )))).compile()?;
+    deforfun("alloc", &["size"], || {
+        define("ptr", Eval::Value(Value::variable_alloc(get("size")?)))?;
+        set_return(get("ptr")?);
+        Ok(())
+    });
 
-    // Expr::Define(Define::new("a", Box::new(Value::string("test")))).compile()?;
+    deforfun("free_byte", &["ptr"], || {
+        get("ptr")?.deref().free();
+        Ok(())
+    });
+
+    let prog = Program::from(r#"
+
+fn println(value) {
+    print(value);
+    print('\n');
+
+    return 0;
+}
+
+fn free(ptr, size) {
+    while size {
+        size = sub(size, 1);
+        free_byte(add(ptr, size));
+    }
+
+    return 0;
+}
+
+fn cstr(s, size) {
+    def ptr = alloc(size);
+    *ptr = s;
+
+    return ptr;
+}
+
+fn cstr1(s, size) {
+    def ptr = alloc(size);
+    *ptr = s;
+
+    return ptr;
+}
+
+fn cstr2(s, size) {
+    def ptr = alloc(size);
+    *ptr = s;
+
+    return ptr;
+}
+fn cstr3(s, size) {
+    def ptr = alloc(size);
+    *ptr = s;
+
+    return ptr;
+}
+
+fn start() {
+    def a = cstr("hello world!", 20);
+
+    print_cstr(a);
+    free(a, 20);
+
+    return 0;
+}
+
+"#);
+    // println!("{:#?}", prog);
+    prog.compile()?;
+
     call("start", &vec![])?;
     println!("{}", compile());
 
