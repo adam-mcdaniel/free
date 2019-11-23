@@ -1,4 +1,5 @@
-use core::fmt::{Debug, Error, Formatter};
+use crate::Error;
+use core::fmt;
 
 static mut COMPILED: String = String::new();
 
@@ -127,8 +128,8 @@ impl Clone for Value {
     }
 }
 
-impl Debug for Value {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
             f,
             "(to `{}` | from `{}` | {} wide)",
@@ -398,16 +399,20 @@ impl Value {
         result
     }
 
-    pub fn refer(&self) -> Self {
-        let mut result = Self::new(1);
-        result.number_cells = self.size();
+    pub fn refer(&self) -> Result<Self, Error> {
+        if self.reference_depth > 0 {
+            let mut result = Self::new(1);
+            result.number_cells = self.size();
 
-        unsafe {
-            COMPILED += &result.to();
-            COMPILED += &"+".repeat(self.offset as usize);
-            COMPILED += &result.from();
+            unsafe {
+                COMPILED += &result.to();
+                COMPILED += &"+".repeat(self.offset as usize);
+                COMPILED += &result.from();
+            }
+
+            Ok(result)
+        } else {
+            Err(Error::CannotReferenceAReference)
         }
-
-        result
     }
 }

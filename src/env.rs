@@ -1,9 +1,16 @@
 use crate::Value;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
 pub struct Env {
     scope: HashMap<String, Value>,
 }
+
+// impl Drop for Env {
+//     fn drop(&mut self) {
+//         println!("{:#?}", self);
+//     }
+// }
 
 impl Env {
     pub fn new() -> Self {
@@ -23,7 +30,6 @@ impl Env {
     pub fn free(&mut self) {
         for value in self.scope.values() {
             if !value.is_ref() {
-                // println!("scope dropping {:#?}", value);
                 value.free();
             } else {
                 println!("NOT FREEING {:#?}", value);
