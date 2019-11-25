@@ -1,6 +1,72 @@
-extern crate smpl_typchk;
-use smpl_typchk::{Simplify, C, Error, Program};
-// use regex::Regex;
+use free::{Simplify, C, Error, Program};
+use clap::{clap_app, crate_version,  AppSettings};
+use std::{
+	fs::{read_to_string, write},
+	process::exit
+};
+
+enum Target {
+	C, BrainFuck
+}
+
+
+fn main() -> Result<(), Error> {
+	let matches = clap_app!(free =>
+		(version: crate_version!())
+		(author: "Adam McDaniel <adam.mcdaniel17@gmail.com>")
+		(about: "Compiles code written in the Free programming language")
+		(@arg input: +takes_value +required "Path to free file to compile")
+		(@arg output: +takes_value "Path to output file")
+		(@arg leak_check: --leakcheck "Add memory leak checks")
+		(@group target => 
+			(@arg c: -c --c "Compile to C")
+			(@arg bf: -b --bf "Compile to SMPL/Brainfuck")
+		)
+	)
+    .setting(AppSettings::ArgRequiredElseHelp)
+    .get_matches();
+
+
+	let target = if matches.is_present("bf") { Target::BrainFuck }
+				 else { Target::C };
+
+	let optimization = 10;
+
+	let leak_check = matches.is_present("leak_check");
+
+
+	let output_file = match matches.value_of("output") {
+		Some(file) => file,
+		None => match target {
+			Target::C => "out.c",
+			Target::BrainFuck => "out.smpl",
+		}
+	};
+
+
+	if let Some(file) = matches.value_of("input") {
+		if let Ok(contents) = read_to_string(file) {
+			let compiled = optimize(match Program::from(contents).compile() {
+				Ok(c) => c,
+				Err(e) => {
+					println!("Could not compile program: {:#?}", e);
+					exit(1);
+				}
+			}, optimization);
+
+			let output_contents = match target {
+				Target::C => C::simplify(compiled),
+				Target::BrainFuck => compiled
+			};
+
+			if let Ok(_) = write(&output_file, &output_contents) {
+				println!("Successfully compiled program to {}", output_file);
+			}
+		}
+	}
+	
+    Ok(())
+}
 
 
 pub fn optimize(s: impl ToString, level: usize) -> String {
@@ -13,127 +79,10 @@ pub fn optimize(s: impl ToString, level: usize) -> String {
 
         let move1 = to.clone() + &back;
         let move2 = back + &to;
-        compiled = compiled.replace(&move1, "").replace(&move2, "");
-    }
-
-    println!("// OPTIMIZED {} INSTRUCTIONS", original_len - compiled.len());
-    compiled
-}
-
-
-fn main() -> Result<(), Error> {
-    let prog = Program::from(
-        r#"
-// #[enable(brainfuck)]
-
-// fn cprn(cstr) {
-//     print_cstr(cstr);
-
-//     return 0;
-// }
-
-// fn cprnln(cstr) {
-//     cprn(cstr);
-//     prn('\n');
-
-//     return 0;
-// }
-
-// fn prnln(str) {
-//     prn(str);
-//     prn('\n');
-
-//     return 0;
-// }
-
-fn free(ptr, size) {
-    while size {
-        size = sub(size, 1);
-        free_byte(add(ptr, size));
-    }
-
-    return 0;
-}
-
-// fn cstr(s, size) {
-//     def ptr = alloc(size);
-//     *ptr = s;
-
-//     return ptr;
-// }
-
-// fn mul(a, b) {
-//     def n = 0;
-//     while b {
-//         b = sub(b, 1);
-//         n = add(n, a);
-//     }
-
-//     return n;
-// }
-
-// fn beep() {
-//     prn(7);    
-// }
-
-fn start() {
-    fib(7);
-    def a = "testing";
-    cprintln(&a);
-    def t = cstr("wow", 10);
-    cprintln(t);
-    free(t, 10);
-
-    return 0;
-}
-
-fn cstr(s, len) {
-    def a = alloc(len);
-    *a = s;
-
-    def counter = sub(len, 1);
-    while counter {
-        def ch = *add(a, counter);
-        if ch {}
-        else {
-            *add(a, counter) = 1;
+        for _ in 0..10 {       	
+	        compiled = compiled.replace(&move1, "").replace(&move2, "");
         }
-        counter = sub(counter, 1);
     }
 
-    return a;
-}
-
-
-fn fib(n) {
-    def a = 0;
-    def b = 1;
-    def c = 1;
-
-    while n {
-        c = a;
-        println(digit(a));
-        a = b;
-        b = add(b, c);
-        n = sub(n, 1);
-    }
-
-    return 0;
-}
-    
-fn not(a) {
-    if a { return 0; }
-    else { return 1; }
-}
-
-fn digit(n) {
-    return add(n, 48);
-}
-"#,
-    );
-    // println!("{:#?}", prog);
-    let level = 5;
-    println!("{}", C::simplify(optimize(prog.compile()?, level)));
-    // println!("{}", prog.compile()?);
-    Ok(())
+    compiled
 }
