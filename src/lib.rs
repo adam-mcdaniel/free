@@ -9,3 +9,5 @@ pub mod ir;
 pub use ir::*;
 pub mod parser;
 pub use parser::*;
+pub mod simplify;
+pub use simplify::*;

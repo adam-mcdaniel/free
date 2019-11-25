@@ -1,23 +1,22 @@
 extern crate smpl_typchk;
-use smpl_typchk::{Error, Program};
+use smpl_typchk::{Simplify, C, Error, Program};
 // use regex::Regex;
 
 
-fn optimize(s: impl ToString) -> String {
+pub fn optimize(s: impl ToString, level: usize) -> String {
     let mut compiled = s.to_string().chars().filter(|ch| ['>', '<', ',', '.', '[', ']', '+', '-', '*', '?', '&'].contains(ch)).collect::<String>();
     let original_len = compiled.len();
 
-    while compiled.contains("<<<>>>") || compiled.contains(">>><<<") {
-        compiled = compiled.replace("<<<>>>", "").replace(">>><<<", "");
-    }
-    while compiled.contains("<>") || compiled.contains("><") {
-        compiled = compiled.replace("<>", "").replace("><", "");
+    for n in 1..level+1 {
+        let to = ">".repeat(n);
+        let back = "<".repeat(n);
+
+        let move1 = to.clone() + &back;
+        let move2 = back + &to;
+        compiled = compiled.replace(&move1, "").replace(&move2, "");
     }
 
-    // let reference = Regex::new(r"[>]+&").unwrap();
-    // compiled = reference.replace_all(&compiled, "&").to_string();
-
-    println!("OPTIMIZED {} INSTRUCTIONS", original_len - compiled.len());
+    println!("// OPTIMIZED {} INSTRUCTIONS", original_len - compiled.len());
     compiled
 }
 
@@ -77,6 +76,17 @@ fn free(ptr, size) {
 //     prn(7);    
 // }
 
+fn start() {
+    fib(7);
+    def a = "testing";
+    cprintln(&a);
+    def t = cstr("wow", 10);
+    cprintln(t);
+    free(t, 10);
+
+    return 0;
+}
+
 fn cstr(s, len) {
     def a = alloc(len);
     *a = s;
@@ -94,15 +104,6 @@ fn cstr(s, len) {
     return a;
 }
 
-    
-fn not(a) {
-    if a { return 0; }
-    else { return 1; }
-}
-
-fn digit(n) {
-    return add(n, 48);
-}
 
 fn fib(n) {
     def a = 0;
@@ -119,22 +120,20 @@ fn fib(n) {
 
     return 0;
 }
-
-fn start() {
-    // fib(7);
     
-
-    def a = "testing";
-    cprintln(&a);
-    cprintln(cstr("wow", 3));
-
-    return 0;
+fn not(a) {
+    if a { return 0; }
+    else { return 1; }
 }
 
+fn digit(n) {
+    return add(n, 48);
+}
 "#,
     );
     // println!("{:#?}", prog);
-    println!("{}", optimize(prog.compile()?));
+    let level = 5;
+    println!("{}", C::simplify(optimize(prog.compile()?, level)));
     // println!("{}", prog.compile()?);
     Ok(())
 }

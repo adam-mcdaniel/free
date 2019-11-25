@@ -65,13 +65,13 @@ pub WhileLoop: Expr = {
 }
 
 pub IfStatement: Expr = {
-    "if" <condition:Ident> "{" <then_body:Body> "}" <else_clause:("else" "{" <Body> "}")?> => {
+    "if" <condition:Value> "{" <then_body:Body> "}" <else_clause:("else" "{" <Body> "}")?> => {
         match else_clause {
             Some(clause) => {
-                Expr::If(If::new(Eval::Load(Load::new(condition)), then_body, clause))
+                Expr::If(If::new(condition, then_body, clause))
             }
             None => {
-                Expr::If(If::new(Eval::Load(Load::new(condition)), then_body, vec![]))
+                Expr::If(If::new(condition, then_body, vec![]))
             }
         }
     }

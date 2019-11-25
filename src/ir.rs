@@ -10,14 +10,39 @@ lazy_static! {
     /// For example, if a variable `test` is allocated statically with size 4, the STACK_PTR
     /// will be allocated by 4, and the next variable will be allocated at the STACK_PTR
     pub static ref STACK_PTR: Mutex<u32> = Mutex::new(0);
-    pub static ref RETURN: Value = Value::new(1);
-    pub static ref TEMP0: Value = Value::new(1);
-    pub static ref TEMP1: Value = Value::new(1);
-    pub static ref TEMP2: Value = Value::new(1);
-    pub static ref TEMP3: Value = Value::new(1);
-    pub static ref TEMP4: Value = Value::new(1);
-    pub static ref TEMP5: Value = Value::new(1);
-    pub static ref TEMP6: Value = Value::new(1);
+    pub static ref RETURN: Value = Value::new(1).unwrap();
+    pub static ref TEMP0: Value = Value::new(1).unwrap();
+    pub static ref TEMP1: Value = Value::new(1).unwrap();
+    pub static ref TEMP2: Value = Value::new(1).unwrap();
+    pub static ref TEMP3: Value = Value::new(1).unwrap();
+    pub static ref TEMP4: Value = Value::new(1).unwrap();
+    pub static ref TEMP5: Value = Value::new(1).unwrap();
+    pub static ref TEMP6: Value = Value::new(1).unwrap();
+
+    pub static ref STACK_SIZE: Mutex<u32> = Mutex::new(2048);
+    pub static ref HEAP_SIZE: Mutex<u32> = Mutex::new(2048);
+}
+
+
+
+pub fn increment_stack(allocation_size: u32) -> Result<(), Error> {
+    let mut stack_ptr = STACK_PTR.lock().unwrap();
+    *stack_ptr += allocation_size;
+    if *stack_ptr > *STACK_SIZE.lock().unwrap() {
+        Err(Error::StackOverflow)
+    } else {
+        Ok(())
+    }
+}
+
+pub fn set_stack(stack_size: u32) -> Result<(), Error> {
+    let mut stack_ptr = STACK_PTR.lock().unwrap();
+    *stack_ptr = stack_size;
+    if *stack_ptr > *STACK_SIZE.lock().unwrap() {
+        Err(Error::StackOverflow)
+    } else {
+        Ok(())
+    }
 }
 
 pub fn add_to_compiled(s: impl ToString) {
@@ -192,7 +217,7 @@ impl fmt::Debug for Value {
 }
 
 impl Value {
-    pub fn new(size: u32) -> Self {
+    pub fn new(size: u32) -> Result<Self, Error> {
         let result = Self {
             offset: *STACK_PTR.lock().unwrap(),
             reference_depth: 0,
@@ -201,12 +226,12 @@ impl Value {
 
         result.zero();
 
-        *(STACK_PTR.lock().unwrap()) += size;
-        result
+        increment_stack(size)?;
+        Ok(result)
     }
 
     pub fn alloc(size: u32) -> Result<Self, Error> {
-        let mut result = Self::new(1);
+        let mut result = Self::new(1)?;
         result.number_cells = size;
 
         add_to_compiled(format!("\nALLOCATING {} CELLS\n", size));
@@ -226,7 +251,7 @@ impl Value {
     }
 
     pub fn variable_alloc(size: Self) -> Result<Self, Error> {
-        let result = Self::new(1);
+        let result = Self::new(1)?;
 
         result.assign(size)?;
 
@@ -244,7 +269,7 @@ impl Value {
     }
 
     pub fn copy(&self) -> Result<Self, Error> {
-        let val = Value::new(self.number_cells);
+        let val = Self::new(self.number_cells)?;
         val.assign(*self)?;
         Ok(val)
     }
@@ -432,16 +457,16 @@ impl Value {
         }
     }
 
-    pub fn byte_int(value: u8) -> Self {
-        let result = Self::new(1);
+    pub fn byte_int(value: u8) -> Result<Self, Error> {
+        let result = Self::new(1)?;
         add_to_compiled(result.to());
         add_to_compiled("+".repeat(value as usize));
         add_to_compiled(result.from());
-        result
+        Ok(result)
     }
 
     pub fn unsigned_4byte_int(value: u32) -> Result<Self, Error> {
-        let result = Self::new(1);
+        let result = Self::new(1)?;
         add_to_compiled(result.to());
         add_to_compiled("+".repeat(value as usize));
         add_to_compiled(result.from());
@@ -453,16 +478,16 @@ impl Value {
         }
     }
 
-    pub fn character(value: char) -> Self {
-        let result = Self::new(1);
+    pub fn character(value: char) -> Result<Self, Error> {
+        let result = Self::new(1)?;
         add_to_compiled(result.to());
         add_to_compiled("+".repeat(value as usize));
         add_to_compiled(result.from());
-        result
+        Ok(result)
     }
 
-    pub fn string(value: impl ToString) -> Self {
-        let result = Self::new((value.to_string().len() + 1) as u32);
+    pub fn string(value: impl ToString) -> Result<Self, Error> {
+        let result = Self::new((value.to_string().len() + 1) as u32)?;
 
         add_to_compiled(result.to());
         for ch in value.to_string().chars() {
@@ -474,7 +499,7 @@ impl Value {
         }
         add_to_compiled(result.from());
 
-        result
+        Ok(result)
     }
 
     pub fn to(&self) -> String {
@@ -490,7 +515,7 @@ impl Value {
     }
 
     pub fn deref(&self) -> Result<Self, Error> {
-        let mut result = Self::new(1);
+        let mut result = Self::new(1)?;
         // result.number_cells = self.size();
 
         result.reference_depth = self.reference_depth + 1;
@@ -504,7 +529,7 @@ impl Value {
     }
 
     pub fn refer(&self) -> Result<Self, Error> {
-        let result = Self::new(1);
+        let result = Self::new(1)?;
 
         add_to_compiled(result.to());
         add_to_compiled("+".repeat(self.offset as usize));

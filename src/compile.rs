@@ -1,5 +1,5 @@
 use crate::{
-    add_to_compiled, compile, init, Control, Env, ProgramParser, Stdout, Value, RETURN, STACK_PTR,
+    STACK_SIZE, HEAP_SIZE, add_to_compiled, set_stack, compile, init, Control, Env, ProgramParser, Stdout, Value, RETURN, STACK_PTR,
 };
 use comment::rust::strip;
 use rand::distributions::Alphanumeric;
@@ -20,6 +20,7 @@ lazy_static! {
     static ref ENABLE_BRAINFUCK: Mutex<bool> = Mutex::new(false);
     /// If the user enables size warnings, this flag is set
     static ref ENABLE_SIZE_WARN: Mutex<bool> = Mutex::new(false);
+
     /// This hashmap contains all the user defined functions for the program
     static ref FN_DEFS: Mutex<HashMap<String, UserFn>> = Mutex::new(HashMap::new());
     /// This hashmap contains all the compiler defined functions for the program
@@ -126,6 +127,21 @@ impl Program {
         *ENABLE_SIZE_WARN.lock().unwrap()
     }
 
+    /// Get the stack size
+    pub fn stack_size() -> u32 {
+        *STACK_SIZE.lock().unwrap()
+    }
+
+    /// Get the heap size
+    pub fn heap_size() -> u32 {
+        *HEAP_SIZE.lock().unwrap()
+    }
+
+    /// Get the tape size
+    pub fn tape_size() -> u32 {
+        Self::stack_size() + Self::heap_size()
+    }
+
     /// Compile the code
     pub fn compile(self) -> Result<String, Error> {
         // Add the compiler functions
@@ -138,6 +154,7 @@ impl Program {
         for fun in funs {
             fun.compile();
         }
+
         call("start", &vec![])?;
 
         // Return compiled code
@@ -156,6 +173,7 @@ pub enum Flag {
 /// The possible compiler errors
 #[derive(Clone, Debug)]
 pub enum Error {
+    StackOverflow,
     MustReturnSingleByte,
     CannotReferenceAReference,
     CannotUsePointersInBrainFuckMode,
@@ -393,15 +411,15 @@ impl Lower for Literal {
         match self {
             Self::String(s) => {
                 name = format!("%TEMP_STR_LITERAL_{}%", rand_str());
-                define_no_cp(&name, Eval::Value(Value::string(s)))?;
+                define_no_cp(&name, Eval::Value(Value::string(s)?))?;
             }
             Self::Character(ch) => {
                 name = format!("%TEMP_CHAR_LITERAL_{}%", rand_str());
-                define_no_cp(&name, Eval::Value(Value::character(*ch)))?;
+                define_no_cp(&name, Eval::Value(Value::character(*ch)?))?;
             }
             Self::ByteInt(byte) => {
                 name = format!("%TEMP_BYTE_LITERAL_{}%", rand_str());
-                define_no_cp(&name, Eval::Value(Value::byte_int(*byte)))?;
+                define_no_cp(&name, Eval::Value(Value::byte_int(*byte)?))?;
             }
             Self::Unsigned4ByteInt(ui) => {
                 name = format!("%TEMP_U32_LITERAL_{}%", rand_str());
@@ -460,7 +478,7 @@ impl UserFn {
         let mut env = Env::new();
 
         for (i, p) in self.parameters.iter().enumerate() {
-            env.define(p.to_string(), args[i].lower()?)?; //.copy());
+            env.define(p.to_string(), args[i].lower()?)?;
         }
 
         push_scope(env);
@@ -470,7 +488,7 @@ impl UserFn {
         }
 
         pop_scope().free();
-        *STACK_PTR.lock().unwrap() = stack_frame; // + RETURN.size();
+        set_stack(stack_frame)?;
 
         Ok(())
     }
@@ -506,9 +524,6 @@ pub fn define(name: impl ToString, val: Eval) -> Result<(), Error> {
 }
 
 pub fn define_no_cp(final_name: impl ToString, value: Eval) -> Result<(), Error> {
-    // Define::new("%TEMP_DEFINE%", val).compile()?;
-    // Define::new(name, Eval::Load(Load::new("%TEMP_DEFINE%"))).compile()?;
-    // Ok(())
     let name = format!("%TEMP_DEFINE_{}%", rand_str());
 
     let val = value.lower()?;
@@ -652,16 +667,15 @@ impl ForeignFn {
         let mut env = Env::new();
 
         for (i, p) in self.parameters.iter().enumerate() {
-            env.define(p.to_string(), args[i].lower()?)?; //.copy());
+            env.define(p.to_string(), args[i].lower()?)?;
         }
 
         push_scope(env);
 
         (self.body)()?;
 
-        // pop_scope();
         pop_scope().free();
-        *STACK_PTR.lock().unwrap() = stack_frame; // + RETURN.size();
+        set_stack(stack_frame)?;
 
         Ok(())
     }
