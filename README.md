@@ -227,3 +227,20 @@ And lastly, the program prints out the string and cleans up the stack.
 Although most of this output code is understandable, there are still a few sections that are confusing to me.
 
 Like I'm not completely sure why `>+<` is there when the program is storing the `Hello world!` string, but whatever. It works, and I've drained my capacity to care why.
+
+
+# Usage and Installation
+
+The best way to install free is with the rust package manager.
+
+```bash
+cargo install -f fr
+```
+
+Then, free files can be compiled with the `fr` binary.
+
+```bash
+fr in.fr
+gcc out.c
+./a.out
+```

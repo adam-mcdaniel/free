@@ -11,7 +11,7 @@ enum Target {
 
 
 fn main() -> Result<(), Error> {
-	let matches = clap_app!(free =>
+	let matches = clap_app!(fr =>
 		(version: crate_version!())
 		(author: "Adam McDaniel <adam.mcdaniel17@gmail.com>")
 		(about: "Compiles code written in the Free programming language")
