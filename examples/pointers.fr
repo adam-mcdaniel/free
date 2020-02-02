@@ -1,0 +1,112 @@
+// brainfuck mode does not allow for pointers
+// #[enable(brainfuck)]
+
+
+fn start() {
+    def test = "wow!";
+    cprint(&test);
+}
+
+fn inc(pn) {
+    def n = *pn;
+    *pn = add(n, 1);
+}
+
+fn cprint(str) {
+    def n = strlen(str);
+    def counter = 0;
+    def running = less(counter, n);
+    while running {
+        print(*add(str, counter));
+        counter = add(counter, 1);
+        running = less(counter, n);
+    }
+}
+
+fn strlen(str) {
+    def n = 0;
+    def ptr = str;
+    def running = 1;
+    while running {
+        if eq(*ptr, 1) {
+            running = 0;
+        }
+        n = add(n, 1);
+        ptr = add(ptr, 1);
+    }
+    return sub(n, 1);
+}
+
+fn bool(b) {
+    if b { return 't'; }
+    else { return 'f'; }
+}
+
+fn eq(a, b) {
+    if sub(a, b) { return 0; }
+    else { return 1; }
+}
+
+fn neq(a, b) {
+    return not(eq(a, b));
+}
+
+fn greater(a, b) {
+    return and(neq(a, b), less(b, a));
+}
+
+fn less(a, b) {
+    def c = 0;
+    def result = 0;
+    def running = 1;
+    while running {
+        if eq(a, c) {
+            if neq(b, c) {
+                result = 1;
+            } else {
+                result = 0;
+            }
+            running = 0;
+        }
+
+        if eq(b, c) {
+            if neq(a, c) {
+                result = 0;
+            } else {
+                result = 0;
+            }
+            running = 0;
+        }
+
+        c = add(c, 1);
+    }
+
+    return result;
+}
+
+
+fn not(a) {
+    if a { return 0; }
+    else { return 1; }
+}
+
+fn and(a, b) {
+    if a { if b { return 1; } else { return 0; } }
+    else { return 0; }
+}
+
+fn or(a, b) {
+    if add(a, b) { return 1; }
+    else { return 0; }
+}
+
+
+// free_byte only frees a single cell, so free must be implemented manually
+fn free(ptr, size) {
+    while size {
+        size = sub(size, 1);
+        free_byte(add(ptr, size));
+    }
+
+    return 0;
+}

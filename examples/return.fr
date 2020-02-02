@@ -1,0 +1,13 @@
+#[enable(brainfuck)]
+
+fn start() {
+    if test() {
+        println("True!");
+    } else {
+        println("False!");
+    }
+}
+
+fn test() {
+    return 1;
+}

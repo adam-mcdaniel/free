@@ -1,3 +1,7 @@
 /target
 **/*.rs.bk
 Cargo.lock
+a.out
+*.c
+*.go
+*.smpl
