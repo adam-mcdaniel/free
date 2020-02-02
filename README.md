@@ -240,7 +240,7 @@ cargo install -f fr
 Then, free files can be compiled with the `fr` binary.
 
 ```bash
-fr in.fr
+free in.fr
 gcc out.c
 ./a.out
 ```
