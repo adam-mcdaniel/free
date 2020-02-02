@@ -5,3 +5,4 @@ a.out
 *.c
 *.go
 *.smpl
+.vscode
