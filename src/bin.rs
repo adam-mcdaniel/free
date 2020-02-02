@@ -1,4 +1,4 @@
-use free::{Simplify, C, Error, Program};
+use fr::{Simplify, C, Error, Program};
 use clap::{clap_app, crate_version,  AppSettings};
 use std::{
 	fs::{read_to_string, write},
