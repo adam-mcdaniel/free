@@ -12,7 +12,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
-name = "free"
+name = "fr"
 path = "src/bin.rs"
 
 [build-dependencies]
