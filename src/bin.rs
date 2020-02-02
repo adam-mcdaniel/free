@@ -17,7 +17,7 @@ fn main() -> Result<(), Error> {
 		(about: "Compiles code written in the Free programming language")
 		(@arg input: +takes_value +required "Path to free file to compile")
 		(@arg output: +takes_value "Path to output file")
-		(@arg leak_check: --leakcheck "Add memory leak checks")
+		// (@arg leak_check: --leakcheck "Add memory leak checks")
 		(@group target => 
 			(@arg c: -c --c "Compile to C")
 			(@arg bf: -b --bf "Compile to SMPL/Brainfuck")
@@ -32,8 +32,7 @@ fn main() -> Result<(), Error> {
 
 	let optimization = 10;
 
-	let leak_check = matches.is_present("leak_check");
-
+	// let leak_check = matches.is_present("leak_check");
 
 	let output_file = match matches.value_of("output") {
 		Some(file) => file,

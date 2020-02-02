@@ -15,7 +15,7 @@ pub Char: char = <s:r#"'(\\.|[^"])'"#> => String::from(&s[1..s.len()-1]).replace
 pub Num: Literal = {
     r"([0-9]+([.][0-9]*)?|[.][0-9]+)" => match <>.parse::<u8>() {
         Ok(val) => Literal::byte_int(val),
-        Err(_) => Literal::unsigned_4byte_int(<>.parse::<u32>().unwrap()),
+        Err(_) => Literal::unsigned_short(<>.parse::<u16>().unwrap()),
     },
 }
 

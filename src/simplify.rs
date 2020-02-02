@@ -20,7 +20,7 @@ impl Simplify for C {
 const int TAPE_SIZE = {TAPE_SIZE};
 const int REF_TAPE_SIZE = {REF_TAPE_SIZE};
 
-unsigned int tape[{TAPE_SIZE}];
+unsigned short tape[{TAPE_SIZE}];
 unsigned int ref_tape[{TAPE_SIZE}];
 unsigned int ptr = 0;
 unsigned int ref_ptr = 0;
@@ -97,7 +97,8 @@ int main() {{
                     '?' => "tape[ptr] = allocate();".repeat(repeated),
                     '[' => "while (tape[ptr]) {".repeat(repeated),
                     ']' => "}\n".repeat(repeated),
-                    '.' => format!("printf(\"%c\",(char)(tape[ptr]%{TAPE_SIZE}));", TAPE_SIZE = Program::tape_size()).repeat(repeated),
+                    '.' => "printf(\"%c\",(char)(tape[ptr]%256));".repeat(repeated),
+                    ',' => "scanf(\"%c\", (char*)&tape[ptr]);".repeat(repeated),
                     _ => String::new()
                 };
                 result += &(line + "\n");

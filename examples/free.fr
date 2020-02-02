@@ -1,0 +1,19 @@
+
+fn start() {
+    // Allocate 128 bytes of memory and store the pointer to that block in `str`
+    def size = 128;
+    def str = alloc(size);
+    free(str, size);
+}
+
+// free_byte only frees a single cell, so free must be implemented manually
+fn free(ptr, size) {
+    while size {
+        size = sub(size, 1);
+        // free_byte is built in
+        free_byte(add(ptr, size));
+    }
+
+    // Store 0 in the return register
+    return 0;
+}

@@ -1,5 +1,5 @@
 // auto-generated: "lalrpop 0.17.2"
-// sha256: 34d9ca46c4a7dba0dd98d76c3060a0cbddec8524d1e5f5f18caa2819c87d059
+// sha256: 0c76ea4f0e0f6b8f56333e5b7f5ad32fa13d367a568fff9da6239698eb05dfa
 use crate::compile::*;
 #[allow(unused_extern_crates)]
 extern crate lalrpop_util as __lalrpop_util;
@@ -40581,7 +40581,7 @@ fn __action15<
 {
     match __0.parse::<u8>() {
         Ok(val) => Literal::byte_int(val),
-        Err(_) => Literal::unsigned_4byte_int(__0.parse::<u32>().unwrap()),
+        Err(_) => Literal::unsigned_short(__0.parse::<u16>().unwrap()),
     }
 }
 

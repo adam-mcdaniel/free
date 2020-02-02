@@ -177,7 +177,7 @@ pub enum Error {
     MustReturnSingleByte,
     CannotReferenceAReference,
     CannotUsePointersInBrainFuckMode,
-    CannotUse4ByteUnsignedIntsInBrainFuckMode,
+    CannotUseUnsignedShortsInBrainFuckMode,
     CannotAssignLargerValueToSmallerValueInBrainFuckMode,
     FunctionNotDefined(String),
     VariableNotDefined(String, Env),
@@ -384,7 +384,7 @@ pub enum Literal {
     String(String),
     Character(char),
     ByteInt(u8),
-    Unsigned4ByteInt(u32),
+    UnsignedShort(u16),
 }
 
 impl Literal {
@@ -400,8 +400,8 @@ impl Literal {
         Self::ByteInt(b)
     }
 
-    pub fn unsigned_4byte_int(ui: u32) -> Self {
-        Self::Unsigned4ByteInt(ui)
+    pub fn unsigned_short(ui: u16) -> Self {
+        Self::UnsignedShort(ui)
     }
 }
 
@@ -421,26 +421,12 @@ impl Lower for Literal {
                 name = format!("%TEMP_BYTE_LITERAL_{}%", rand_str());
                 define_no_cp(&name, Eval::Value(Value::byte_int(*byte)?))?;
             }
-            Self::Unsigned4ByteInt(ui) => {
-                name = format!("%TEMP_U32_LITERAL_{}%", rand_str());
-                define_no_cp(&name, Eval::Value(Value::unsigned_4byte_int(*ui)?))?;
+            Self::UnsignedShort(ui) => {
+                name = format!("%TEMP_U16_LITERAL_{}%", rand_str());
+                define_no_cp(&name, Eval::Value(Value::unsigned_short(*ui)?))?;
             }
         }
         get(name)
-        // match self {
-        //     Self::String(s) => {
-        //         Value::string(s).copy()
-        //     }
-        //     Self::Character(ch) => {
-        //         Value::character(*ch).copy()
-        //     }
-        //     Self::ByteInt(byte) => {
-        //         Value::byte_int(*byte).copy()
-        //     }
-        //     Self::Unsigned4ByteInt(ui) => {
-        //         Value::unsigned_4byte_int(*ui)?.copy()
-        //     }
-        // }
     }
 }
 

@@ -1,0 +1,225 @@
+fn start() {
+
+	def test = "testing";
+	revstr(&test);
+	println(test);
+    
+    return 0;
+}
+
+fn cprint(str) {
+    def n = strlen(str);
+    def counter = 0;
+    def running = less(counter, n);
+    while running {
+        print(*add(str, counter));
+        counter = add(counter, 1);
+        running = less(counter, n);
+    }
+}
+
+fn cprintln(str) {
+	cprint(str);
+	print('\n');
+}
+
+
+fn putstr(str) { print(str); }
+fn putstrln(str) { println(str); }
+
+fn div(a, b) {
+    if eq(a, b) {
+        return 1;
+    } else {
+        def n = 0;
+        def running = or(greater(a, b), eq(a, b));
+        while running {
+            a = sub(a, b);
+
+            n = add(n, 1);
+            running = or(greater(a, b), eq(a, b));
+        }
+        return n;
+    }
+}
+
+fn rem(a, b) {
+    if not(div(a, b)) {
+        return a;
+    } else {
+        def n = 0;
+        def running = or(greater(a, b), eq(a, b));
+        while running {
+            a = sub(a, b);
+
+            n = add(n, 1);
+            running = or(greater(a, b), eq(a, b));
+        }
+
+        return a;
+    }
+}
+
+
+fn num2str(n) {
+    def counter = 5;
+    def ptr = alloc(add(counter, 1));
+    def start_ptr = ptr;
+
+    def running = 1;
+    while running {
+        *ptr = digit(rem(n, 10));
+        ptr = add(ptr, 1);
+        n = div(n, 10);
+        
+        running = greater(n, 0);
+        if not(running) {
+            *ptr = 1;
+        }
+    }
+
+    revstr(start_ptr);
+    return start_ptr;
+}
+
+
+fn revstr(str2) {
+    def n = strlen(str2);
+    def counter = 0;
+    def running = less(counter, n);
+
+    def str1 = alloc(n);
+    strcpy(str2, str1);
+
+    while running {
+        def ch = *add(str1, counter);
+        *add(str2, sub(n, add(counter, 1))) = ch; 
+        counter = add(counter, 1);
+        running = less(counter, n);
+    }
+}
+
+fn strcpy(str1, str2) {
+    def n = strlen(str1);
+    def counter = 0;
+    def running = less(counter, n);
+    while running {
+        def ch = *add(str1, counter);
+        *add(str2, counter) = ch; 
+        counter = add(counter, 1);
+        running = less(counter, n);
+    }
+}
+
+fn strfree(str) {
+    def len = strlen(str);
+    free(str, len);
+}
+
+fn index(arr, n) { return add(arr, n); }
+
+fn strlen(str) {
+    def n = 0;
+    def ptr = str;
+    def running = 1;
+    while running {
+        if eq(*ptr, 1) {
+            running = 0;
+        }
+        n = add(n, 1);
+        ptr = add(ptr, 1);
+    }
+    return sub(n, 1);
+}
+
+fn bool(b) {
+    if b { return 't'; }
+    else { return 'f'; }
+}
+
+fn eq(a, b) {
+    if sub(a, b) { return 0; }
+    else { return 1; }
+}
+
+fn neq(a, b) {
+    return not(eq(a, b));
+}
+
+fn greater(a, b) {
+    return and(neq(a, b), less(b, a));
+}
+
+fn less(a, b) {
+    def c = 0;
+    def result = 0;
+    def running = 1;
+    while running {
+        if eq(a, c) {
+            if neq(b, c) {
+                result = 1;
+            } else {
+                result = 0;
+            }
+            running = 0;
+        }
+
+        if eq(b, c) {
+            if neq(a, c) {
+                result = 0;
+            } else {
+                result = 0;
+            }
+            running = 0;
+        }
+
+        c = add(c, 1);
+    }
+
+    return result;
+}
+
+fn not(a) {
+    if a { return 0; }
+    else { return 1; }
+}
+
+fn and(a, b) {
+    if a { if b { return 1; } else { return 0; } }
+    else { return 0; }
+}
+
+fn or(a, b) {
+    if add(a, b) { return 1; }
+    else { return 0; }
+}
+
+fn fib(n) {
+    def a = 0;
+    def b = 1;
+    def c = 1;
+
+    while n {
+        c = a;
+        println(digit(a));
+        a = b;
+        b = add(b, c);
+        n = sub(n, 1);
+    }
+
+    return 0;
+}
+
+
+fn digit(n) {
+    return add(n, 48);
+}
+
+fn free(ptr, size) {
+    while size {
+        size = sub(size, 1);
+        free_byte(add(ptr, size));
+    }
+
+    return 0;
+}

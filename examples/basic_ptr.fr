@@ -1,0 +1,13 @@
+
+fn start() {
+    def a = 5;
+    // print `a` as a digit by adding ascii code for 0
+    println(add(a, 48));
+    inc(&a);
+    // print `a` as a digit by adding ascii code for 0
+    println(add(a, 48));
+}
+
+fn inc(ptr) {
+    *ptr = add(*ptr, 1);
+}

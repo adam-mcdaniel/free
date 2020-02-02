@@ -1,0 +1,5 @@
+#[enable(brainfuck)]
+
+fn start() {
+    println("Hello, world!");
+}

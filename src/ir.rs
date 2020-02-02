@@ -371,8 +371,6 @@ impl Value {
         Ok(())
     }
 
-
-
     pub fn plus_eq(&self, val: Self) {
         TEMP0.zero();
 
@@ -465,14 +463,14 @@ impl Value {
         Ok(result)
     }
 
-    pub fn unsigned_4byte_int(value: u32) -> Result<Self, Error> {
+    pub fn unsigned_short(value: u16) -> Result<Self, Error> {
         let result = Self::new(1)?;
         add_to_compiled(result.to());
         add_to_compiled("+".repeat(value as usize));
         add_to_compiled(result.from());
 
         if Program::brainfuck_enabled() {
-            Err(Error::CannotUse4ByteUnsignedIntsInBrainFuckMode)
+            Err(Error::CannotUseUnsignedShortsInBrainFuckMode)
         } else {
             Ok(result)
         }
