@@ -3,6 +3,11 @@ name = "fr"
 version = "0.1.0"
 authors = ["adam-mcdaniel <adam.mcdaniel17@gmail.com>"]
 edition = "2018"
+description = "A programming language with an unusual compiler backend"
+homepage = "https://github.com/adam-mcdaniel/free"
+website = "https://github.com/adam-mcdaniel/free"
+readme = "README.md"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
