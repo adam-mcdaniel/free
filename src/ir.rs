@@ -1,4 +1,4 @@
-use crate::{Error, Program, Eval, Literal, Lower};
+use crate::{Error, Eval, Literal, Lower, Program};
 use core::fmt;
 use std::sync::Mutex;
 
@@ -22,8 +22,6 @@ lazy_static! {
     pub static ref STACK_SIZE: Mutex<u32> = Mutex::new(2048);
     pub static ref HEAP_SIZE: Mutex<u32> = Mutex::new(2048);
 }
-
-
 
 pub fn increment_stack(allocation_size: u32) -> Result<(), Error> {
     let mut stack_ptr = STACK_PTR.lock().unwrap();
