@@ -22,6 +22,20 @@ There is no real elegant solution to representing pointers in brainfuck.
 
 However, enabled by the powers of SMPL we can represent pointer operations rather elegantly.
 
+| SMPL Operator | Description |
+|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| > | Move the pointer to the right |
+| < | Move the pointer to the left |
+| + | Increment the memory cell under the pointer |
+| - | Decrement the memory cell under the pointer |
+| . | Output the character stored at the cell under the pointer |
+| , | Input a character and store it in the cell under the pointer |
+| [ | Jump past the matching `]` if the cell under the pointer is zero |
+| ] | Jump back to the matching `[` if the cell under the pointer is not zero |
+| * | Set the pointer equal to the value of the current cell |
+| & | Set the pointer back to the value it was before the last `*` |
+| ? | With the value of the cell under the pointer, store the address of the first instance of that many consecutive zeros from the left of the tape at the current cell |
+
 # Compilation Process
 
 After the input code has been parsed and the AST has been generated, the compilation can begin.
