@@ -2,7 +2,7 @@
 
 A terrible programming language that targets an even worse programming language.
 
-I decided to name this programming language free because there are absolutely no memory constraints whatsoever. It's basically impossible for a free program to segfault or anything like that: you can arbitrarily assign to any memory location. This isn't by design. It's just a byproduct of the target programming language: SMPL.
+I decided to name this programming language free because there are absolutely no memory constraints whatsoever. It's basically impossible for a free program to segfault or anything like that: you can arbitrarily assign to any memory location. This isn't by design. It's just a byproduct of the target programming language: [SMPL](https://github.com/adam-mcdaniel/smpl).
 
 # SMPL
 
