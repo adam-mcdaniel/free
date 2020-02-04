@@ -1,0 +1,560 @@
+fn start() {
+  def expr = "10 20 * 30 + 40 -\0";
+  def result = eval(&expr);
+
+  print("Ans = ");
+  iprint(result);
+  println("");
+}
+
+// Computes value of given RPN-expression.
+//
+// @sig: fn(string) -> int
+fn eval(expr) {
+  def stack = stack_new(32);
+  def parsing = *expr;
+
+  while parsing {
+    def ch = *expr;
+
+    if is_whitespace(ch) {
+      eval_process_whitespace(&expr);
+    } else {
+      if is_digit(ch) {
+        eval_process_number(stack, &expr);
+      } else {
+        if is_operator(ch) {
+          eval_process_operator(stack, &expr);
+        } else {
+          def msg = "expression contains an unknown character\0";
+          panic(&msg);
+        }
+      }
+    }
+
+    parsing = *expr;
+  }
+
+  if neq(stack_len(stack), 1) {
+    def msg = "expression is unbalanced\0";
+    panic(&msg);
+  }
+
+  def result = stack_pop(stack);
+
+  stack_free(stack);
+
+  return result;
+}
+
+// @vis: private
+// @sig: fn(&&char)
+fn eval_process_whitespace(expr) {
+  // We're just skipping all the whitespaces
+  *expr = add(*expr, 1);
+}
+
+// @vis: private
+// @sig: fn(&stack, &&char)
+fn eval_process_number(stack, expr) {
+  def number = alloc(8);
+  def number_ptr = number;
+
+  def parsing = 1;
+
+  while parsing {
+    *number_ptr = **expr;
+    number_ptr = add(number_ptr, 1);
+
+    *expr = add(*expr, 1);
+
+    parsing = is_digit(**expr);
+  }
+
+  *number_ptr = 0;
+
+  stack_push(stack, atoi(number));
+  free(&number, 8);
+}
+
+// @vis: private
+// @sig: fn(&stack, &&char)
+fn eval_process_operator(stack, expr) {  
+  def b = stack_pop(stack);
+  def a = stack_pop(stack);
+  def c = 0;
+
+  def op = **expr;
+
+  if eq(op, "+") {
+    c = add(a, b);
+  }
+
+  if eq(op, "-") {
+    c = sub(a, b);
+  }
+
+  if eq(op, "*") {
+    c = mul(a, b);
+  }
+
+  if eq(op, "/") {
+    c = div(a, b);
+  }
+
+  if eq(op, "%") {
+    c = mod(a, b);
+  }
+
+  stack_push(stack, c);
+
+  *expr = add(*expr, 1);
+}
+
+// Returns whether given character is a whitespace.
+//
+// @sig: fn(char) -> bool
+fn is_whitespace(ch) {
+  def whitespaces = " \t\0";
+
+  return strcnt(&whitespaces, ch);
+}
+
+// Returns whether given character is a digit.
+//
+// @sig: fn(char) -> bool
+fn is_digit(ch) {
+  def digits = "0123456789\0";
+
+  return strcnt(&digits, ch);
+}
+
+// Returns whether given character is an operator.
+//
+// @sig: fn(char) -> bool
+fn is_operator(ch) {
+  def operators = "+-*/%\0";
+
+  return strcnt(&operators, ch);
+}
+
+// ------------------------ //
+// Stack-oriented functions //
+
+// Creates a new, empty stack and returns a pointer to it.
+//
+// Since Free as-is doesn't support data types, we're modelling stack as a
+// pointer into memory that we manually process as such:
+//
+//    [ stack ] [ stack + 1 ] [ stack + 2 ] [ ... ]
+//        |           |       | ---- from this point on we've got actual
+//        |           |              stack's items
+//        |           |
+//        |           ^ this contains stack's maximum size
+//        |
+//        ^ this contains stack's length
+//
+// More or less, it's:
+//
+// ```
+// struct stack {
+//   len: int,
+//   size: int,
+//   items: [int; int],
+// }
+// ```
+//
+// @sig: fn(int) -> &stack
+fn stack_new(size) {
+  // We're adding two bytes to the stack's size, because we're going to utilize
+  // stack's first and second byte to store its length and size
+  def stack = alloc(add(size, 2));
+
+  *stack_len_ptr(stack) = 0;
+  *stack_size_ptr(stack) = size;
+
+  return stack;
+}
+
+// Releases memory associated with given stack.
+//
+// @sig: fn(&stack)
+fn stack_free(stack) {
+  free(stack, add(stack_len(stack), 2));
+}
+
+// Pushes given value onto the stack.
+//
+// @sig: fn(&stack, int)
+fn stack_push(stack, value) {
+  if stack_is_full(stack) {
+    def msg = "stack overflowed\0";
+    panic(&msg);
+  }
+
+  def len_ptr = stack_len_ptr(stack);
+  def size_ptr = stack_size_ptr(stack);
+  def value_ptr = stack_value_ptr(stack, *len_ptr);
+
+  // Store value inside the stack
+  *value_ptr = value;
+
+  // Increase stack's size
+  *len_ptr = add(*len_ptr, 1);
+}
+
+// Pops value from the top of given stack.
+//
+// @sig: fn(&stack) -> int
+fn stack_pop(stack) {
+  if stack_is_empty(stack) {
+    def msg = "stack underflowed\0";
+    panic(&msg);
+  }
+
+  def len_ptr = stack_len_ptr(stack);
+
+  // Decrease stack's size
+  *len_ptr = sub(*len_ptr, 1);
+
+  // Load value from the stack
+  def value_ptr = stack_value_ptr(stack, *len_ptr);
+
+  return *value_ptr;
+}
+
+// Returns number of elements inside given stack right now.
+//
+// @sig: fn(&stack) -> int
+fn stack_len(stack) {
+  def len_ptr = stack_len_ptr(stack);
+
+  return *len_ptr;
+}
+
+// Returns whether given stack is empty.
+//
+// @sig: fn(&stack) -> bool
+fn stack_is_empty(stack) {
+  def len_ptr = stack_len_ptr(stack);
+
+  return eq(*len_ptr, 0);
+}
+
+// Returns whether given stack is full.
+//
+// @sig: fn(&stack) -> bool
+fn stack_is_full(stack) {
+  def len_ptr = stack_len_ptr(stack);
+  def size_ptr = stack_size_ptr(stack);
+
+  return gte(*len_ptr, *size_ptr);
+}
+
+// Returns a pointer to an integer indicating the total number of elements
+// inside given stack right now.
+//
+// @vis: private
+// @sig: fn(&stack) -> int
+fn stack_len_ptr(stack) {
+  return add(stack, 0);
+}
+
+// Returns a pointer to an integer indicating the total number of elements
+// given stack can contain.
+//
+// @vis: private
+// @sig: fn(&stack) -> int
+fn stack_size_ptr(stack) {
+  return add(stack, 1);
+}
+
+// Returns a pointer to given stack's value.
+//
+// @vis: private
+// @sig: fn(&stack) -> &T
+fn stack_value_ptr(stack, idx) {
+  return add(stack, add(idx, 2));
+}
+
+// ------------------------- //
+// String-oriented functions //
+
+// Returns number of characters inside given null-terminated string.
+//
+// @sig: fn(&char) -> int
+fn strlen(str) {
+  def len = 0;
+  def running = *str;
+
+  while running {
+    len = add(len, 1);
+    str = add(str, 1);
+    running = *str;
+  }
+
+  return len;
+}
+
+// Reverses given null-terminated string in-place.
+//
+// @sig: fn(&char)
+fn strrev(str) {
+  def len = strlen(str);
+  def running = gte(len, 2);
+
+  if running {
+    def len_half = div(len, 2);
+
+    def idx_a = 0;
+    def idx_b = sub(len, 1);
+
+    while running {
+      pswap(
+        add(str, idx_a),
+        add(str, idx_b),
+      );
+
+      idx_a = add(idx_a, 1);
+      idx_b = sub(idx_b, 1);
+
+      running = neq(idx_a, len_half);
+    }
+  }
+}
+
+// Returns whether given null-terminated string contains given character.
+// Similar to `strpos(str, ch) > 0`, but simpler.
+//
+// @sig: fn(&char, char) -> bool
+fn strcnt(str, ch) {
+  def result = 0;
+  def running = *str;
+
+  while running {
+    if eq(*str, ch) {
+      result = 1;
+      running = 0;
+    } else {
+      str = add(str, 1);
+      running = *str;
+    }
+  }
+
+  return result;
+}
+
+// Converts given integer into a null-terminated string.
+//
+// Given buffer must be large enough to contain the entire number and the null
+// terminator.
+//
+// @sig: fn(int, &char)
+fn itoa(num, buf) {
+  def ptr = buf;
+  def len = 0;
+
+  while num {
+    *ptr = add(48, mod(num, 10));
+    num = div(num, 10);
+
+    ptr = add(ptr, 1);
+    len = add(len, 1);
+  }
+
+  if eq(len, 0) {
+    *ptr = 48;
+    ptr = add(ptr, 1);
+  }
+
+  *ptr = 0;
+
+  strrev(buf);
+}
+
+// Converts given null-terminated string into an integer.
+//
+// If given string contains non-digit characters, the behavior is undefined.
+//
+// @sig: fn(&char) -> int
+fn atoi(str) {
+  def res = 0;
+  def running = *str;
+
+  while running {
+    res = mul(res, 10);
+    res = add(res, sub(*str, 48));
+
+    str = add(str, 1);
+    running = *str;
+  }
+
+  return res;
+}
+
+// Prints a null-terminated string onto the stdout.
+//
+// @sig: fn(&char)
+fn sprint(str) {
+  def running = *str;
+
+  while running {
+    print(*str);
+    str = add(str, 1);
+    running = *str;
+  }
+}
+
+// -------------------------- //
+// Pointer-oriented functions //
+
+// Swaps values under given pointers.
+//
+// @sig: fn(&T, &T)
+fn pswap(a, b) {
+  def tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
+
+// Frees memory under given pointer.
+//
+// @sig: fn(&T, int)
+fn free(ptr, size) {
+  while size {
+    size = sub(size, 1);
+    free_byte(add(ptr, size));
+  }
+}
+
+// -------------------------- //
+// Integer-oriented functions //
+
+// Prints an integer onto the stdout.
+//
+// @sig: fn(int)
+fn iprint(num) {
+  def buf = alloc(16);
+  itoa(num, buf);
+  sprint(buf);
+}
+
+// Multiplies both numbers and returns the result.
+//
+// @sig: fn(int, int) -> int
+fn mul(a, b) {
+  def res = 0;
+
+  while b {
+    res = add(res, a);
+    b = sub(b, 1);
+  }
+
+  return res;
+}
+
+// Divides both numbers and returns the result.
+//
+// It utilizes repeated subtraction and thus is totally inefficient for bigger
+// numbers.
+//
+// @sig: fn(int, int) -> int
+fn div(a, b) {
+  def res = 0;
+  def running = 1;
+
+  while running {
+    if gte(a, b) {
+      a = sub(a, b);
+      res = add(res, 1);
+    } else {
+      running = 0;
+    }
+  }
+
+  return res;
+}
+
+// Returns modulo of both numbers.
+//
+// It utilizes repeated subtraction and thus is totally inefficient for bigger
+// numbers.
+//
+// @sig: fn(int, int) -> int
+fn mod(a, b) {
+  def res = 0;
+
+  while a {
+    if gte(a, b) {
+      a = sub(a, b);
+    } else {
+      res = a;
+      a = 0;
+    }
+  }
+
+  return res;
+}
+
+// Returns whether both numbers are equal.
+//
+// @sig: fn(int, int) -> bool
+fn eq(a, b) {
+  if sub(a, b) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
+// Returns whether both numbers are different.
+//
+// @sig: fn(int, int) -> bool
+fn neq(a, b) {
+  return sub(1, eq(a, b));
+}
+
+// Returns whether first number is greater than or equal to the second one.
+//
+// Since Free doesn't provide any built-ins that would allow us to compare
+// numbers, what we're doing here is basically decreasing numbers by one until
+// either one (or both) eventually are zeroed-out.
+//
+// @sig: fn(int, int) -> bool
+fn gte(a, b) {
+  def res = 0;
+  def running = 1;
+
+  while running {
+    if a { } else {
+      running = 0;
+      res = 0;
+    }
+
+    if b { } else {
+      running = 0;
+      res = 1;
+    }
+
+    a = sub(a, 1);
+    b = sub(b, 1);
+  }
+
+  return res;
+}
+
+// --------------- //
+// Other functions //
+
+// @sig: fn(&char)
+fn panic(msg) {
+  print("panic: ");
+  sprint(msg);
+  println("");
+
+  def true = 1;
+
+  while true {
+    //
+  }
+}
