@@ -1,5 +1,6 @@
 use crate::{
-    STACK_SIZE, HEAP_SIZE, add_to_compiled, set_stack, compile, init, Control, Env, ProgramParser, Stdout, Value, RETURN, STACK_PTR,
+    add_to_compiled, compile, init, set_stack, Control, Env, ProgramParser, Stdout, Value,
+    HEAP_SIZE, RETURN, STACK_PTR, STACK_SIZE,
 };
 use comment::rust::strip;
 use rand::distributions::Alphanumeric;
@@ -76,7 +77,7 @@ impl Program {
             set_return(get("a")?)?;
             Ok(())
         });
-        
+
         // Print function
         deforfun("print", &["a"], || {
             Stdout::print(get("a")?);
@@ -89,7 +90,7 @@ impl Program {
             Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
             Ok(())
         });
-        
+
         // Print function
         deforfun("cprint", &["a"], || {
             Stdout::print_cstr(get("a")?)?;
@@ -149,7 +150,7 @@ impl Program {
 
         // Get function definitions
         let Program(_, funs) = self;
-        
+
         // Compile
         for fun in funs {
             fun.compile();
@@ -161,7 +162,6 @@ impl Program {
         Ok(compile())
     }
 }
-
 
 /// The possible flags to be returned by the parser
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
@@ -235,7 +235,6 @@ pub fn get_return() -> Result<Value, Error> {
     Ok(*RETURN)
 }
 
-
 /// This represents a value that can be evaluated. Variables,
 /// literals, function calls, value dereferences, variable references,
 /// and values (this is a cheat for letting the compiler easily use
@@ -274,7 +273,7 @@ pub enum Expr {
     Eval(Eval),
     Define(Define),
     Assign(Assign),
-    Return(Return)
+    Return(Return),
 }
 
 /// An Expression is evaluated by the expression it contains

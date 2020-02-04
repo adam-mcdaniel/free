@@ -6,7 +6,6 @@ pub trait Simplify {
     fn simplify(s: impl ToString) -> String;
 }
 
-
 pub struct C;
 impl C {
     pub fn new() -> Self {
@@ -16,7 +15,8 @@ impl C {
 
 impl Simplify for C {
     fn prelude() -> String {
-        format!(r#"#include <stdio.h>
+        format!(
+            r#"#include <stdio.h>
 const int TAPE_SIZE = {TAPE_SIZE};
 const int REF_TAPE_SIZE = {REF_TAPE_SIZE};
 
@@ -67,7 +67,10 @@ void refer() {{
 }}
 
 int main() {{
-"#, TAPE_SIZE = Program::tape_size(), REF_TAPE_SIZE = 256)
+"#,
+            TAPE_SIZE = Program::tape_size(),
+            REF_TAPE_SIZE = 256
+        )
     }
 
     fn postlude() -> String {
@@ -79,7 +82,11 @@ int main() {{
         let mut repeated = 0;
         let mut last = '\0';
 
-        let mut filtered = s.to_string().chars().filter(|c| ['>', '<', '+', '-', '*', '&', '?', '[', ']', '.', ','].contains(c)).collect::<String>();
+        let mut filtered = s
+            .to_string()
+            .chars()
+            .filter(|c| ['>', '<', '+', '-', '*', '&', '?', '[', ']', '.', ','].contains(c))
+            .collect::<String>();
         filtered = filtered.replace("[-]", "0");
 
         for ch in filtered.chars() {
@@ -99,14 +106,13 @@ int main() {{
                     ']' => "}\n".repeat(repeated),
                     '.' => "printf(\"%c\",(char)(tape[ptr]%256));".repeat(repeated),
                     ',' => "scanf(\"%c\", (char*)&tape[ptr]);".repeat(repeated),
-                    _ => String::new()
+                    _ => String::new(),
                 };
                 result += &(line + "\n");
                 repeated = 1;
                 last = ch;
             }
         }
-        
 
         result + &Self::postlude()
     }
