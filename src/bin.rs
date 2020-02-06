@@ -32,7 +32,7 @@ fn main() -> Result<(), Error> {
         Target::C
     };
 
-    let optimization = 10;
+    let optimization = 40;
 
     // let leak_check = matches.is_present("leak_check");
 
@@ -86,7 +86,7 @@ pub fn optimize(s: impl ToString, level: usize) -> String {
         let move1 = to.clone() + &back;
         let move2 = back + &to;
         for _ in 0..10 {
-            compiled = compiled.replace(&move1, "").replace(&move2, "");
+            compiled = compiled.replace(&move1, "").replace(&move2, "").replace("*&", "");
         }
     }
 
