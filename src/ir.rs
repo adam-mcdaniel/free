@@ -181,6 +181,29 @@ impl Stdout {
         add_to_compiled(&result);
         add_to_compiled("\nDONE\n");
     }
+
+
+    /// This prints a pointer to a value like a CString
+    /// This requires brainfuck compatibility mode to be disabled.
+    pub fn print_cstr(var: Value) -> Result<(), Error> {
+        let mut result = String::new();
+
+        // Dereference value and print string
+        result += &var.to();
+        result += "*[.>]&";
+        // Refer back to home
+        result += &var.from();
+
+        add_to_compiled("\nPRINT CELL\n");
+        add_to_compiled(&result);
+        add_to_compiled("\nDONE\n");
+
+        if Program::brainfuck_enabled() {
+            Err(Error::CannotUsePointersInBrainFuckMode)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// This object represents a value stored on the tape.
