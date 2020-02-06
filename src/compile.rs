@@ -1,5 +1,5 @@
 use crate::{
-    add_to_compiled, compile, init, set_stack, Control, Env, ProgramParser, Stdout, Value,
+    add_to_compiled, compile, init, set_stack, Control, Env, ProgramParser, Stdout, Stdin, Value,
     HEAP_SIZE, RETURN, STACK_PTR, STACK_SIZE,
 };
 use comment::rust::strip;
@@ -90,20 +90,7 @@ impl Program {
             Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
             Ok(())
         });
-
-        // Print function
-        deforfun("cprint", &["a"], || {
-            Stdout::print_cstr(get("a")?)?;
-            Ok(())
-        });
-
-        // Println function
-        deforfun("cprintln", &["a"], || {
-            Stdout::print_cstr(get("a")?)?;
-            Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
-            Ok(())
-        });
-
+        
         // Allocate `size` number of bytes
         deforfun("alloc", &["size"], || {
             define("ptr", Eval::Value(Value::variable_alloc(get("size")?)?))?;
@@ -114,6 +101,14 @@ impl Program {
         // Free a byte at ptr
         deforfun("free_byte", &["ptr"], || {
             get("ptr")?.deref()?.free();
+            Ok(())
+        });
+
+        // Free a byte at ptr
+        deforfun("getch", &[], || {
+            define("ch", Eval::Value(Value::character('\0')?))?;
+            Stdin::getch(get("ch")?);
+            set_return(get("ch")?)?;
             Ok(())
         });
     }
