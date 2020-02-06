@@ -9,8 +9,8 @@ extern {
 }
 
 
-pub Str: String = <s:r#""(\\.|[^"])*""#> => String::from(&s[1..s.len()-1]).replace("\\n","\n").replace("\\r","\r").replace("\\t","\t").replace("\\0","\0");
-pub Char: char = <s:r#"'(\\.|[^"])'"#> => String::from(&s[1..s.len()-1]).replace("\\n","\n").replace("\\r","\r").replace("\\t","\t").replace("\\0","\0").chars().next().unwrap();
+pub Str: String = <s:r#""(\\.|[^"])*""#> => String::from(&s[1..s.len()-1]).replace("\\n","\n").replace("\\r","\r").replace("\\t","\t").replace("\\0","\0").replace("\\\"", "\"");
+pub Char: char = <s:r#"'(\\.|[^"])'"#> => String::from(&s[1..s.len()-1]).replace("\\n","\n").replace("\\r","\r").replace("\\t","\t").replace("\\0","\0").replace("\\\"", "\"").chars().next().unwrap();
 
 pub Num: Literal = {
     r"([0-9]+([.][0-9]*)?|[.][0-9]+)" => match <>.parse::<u8>() {

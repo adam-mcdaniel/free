@@ -1,0 +1,55 @@
+//
+// Compiler for the SMPL programming language written in free
+//
+
+
+fn start() {
+    def program = alloc(8192);
+    def counter = 0;
+    def input = getch();
+    while input {
+        *add(counter, program) = input;
+        counter = add(counter, 1);
+        input = getch();
+    }
+    
+    compile(program);
+}
+
+// @sig fn(char*)
+fn compile(program) {
+    print("#include <stdio.h>\nconst int TAPE_SIZE = 24576;\nconst int REF_TAPE_SIZE = 256;\nunsigned short tape[24576];\nunsigned int ref_tape[24576];\nunsigned int ptr = 0;\nunsigned int ref_ptr = 0;\nunsigned int allocate() {\n\tunsigned int size = tape[ptr];\n\tint cons_empty_spaces = 0;\n\tfor (int i=TAPE_SIZE-1; i>0; i--) {\n\t\tif (tape[i] == 0) { cons_empty_spaces++; }\n\t\telse { cons_empty_spaces = 0; }\n\t\tif (cons_empty_spaces == size) { return i; }\n\t}\n\treturn 0;\n}\nvoid plus(int n) {\ntape[ptr] += n;\n}\nvoid minus(int n) {\n\ttape[ptr] -= n;\n}\nvoid set(int n) {\n\ttape[ptr] = n;\n}\nvoid left(int n) {\n\tptr -= n;\n}\nvoid right(int n) {\n\tptr += n;\n}\nvoid deref() {\n\tref_tape[ref_ptr++ % REF_TAPE_SIZE] = ptr;\n\tptr = tape[ptr];\n}\nvoid refer() {\n\tptr = ref_tape[--ref_ptr % REF_TAPE_SIZE];\n}\nint main() {\n");
+
+    def n = 0;
+    def running = *add(program, n);
+    while running {
+        compile_op(running);
+
+        n = add(n, 1);
+        running = *add(program, n);
+    }
+
+    print("\n}");
+}
+
+
+// @sig fn(char)
+fn compile_op(ch) {
+    if is_char(ch, '+') { println("plus(1);"); }
+    if is_char(ch, '-') { println("minus(1);"); }
+    if is_char(ch, '<') { println("left(1);"); }
+    if is_char(ch, '>') { println("right(1);"); }
+    if is_char(ch, '[') { println("while (tape[ptr]) {"); }
+    if is_char(ch, ']') { println("}"); }
+    if is_char(ch, '.') { println("printf(\"%c\",(char)(tape[ptr]%256));"); }
+    if is_char(ch, ',') { println("scanf(\"%c\", (char*)&tape[ptr]);"); }
+    if is_char(ch, '&') { println("refer();"); }
+    if is_char(ch, '*') { println("deref();"); }
+    if is_char(ch, '?') { println("allocate();"); }
+}
+
+
+// @sig fn(char, char) -> bool
+fn is_char(ch1, ch2) {
+    if sub(ch1, ch2) { return 0; } else { return 1; }
+}

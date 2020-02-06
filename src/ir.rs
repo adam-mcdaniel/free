@@ -19,8 +19,8 @@ lazy_static! {
     pub static ref TEMP5: Value = Value::new(1).unwrap();
     pub static ref TEMP6: Value = Value::new(1).unwrap();
 
-    pub static ref STACK_SIZE: Mutex<u32> = Mutex::new(2048);
-    pub static ref HEAP_SIZE: Mutex<u32> = Mutex::new(2048);
+    pub static ref STACK_SIZE: Mutex<u32> = Mutex::new(16384);
+    pub static ref HEAP_SIZE: Mutex<u32> = Mutex::new(8192);
 }
 
 pub fn increment_stack(allocation_size: u32) -> Result<(), Error> {
@@ -146,6 +146,21 @@ impl Control {
     }
 }
 
+pub struct Stdin;
+impl Stdin {
+    pub fn getch(var: Value) {
+        let mut result = String::new();
+
+        result += &var.to();
+        result += ",";
+        result += &var.from();
+
+        add_to_compiled("\nPRINT CELL\n");
+        add_to_compiled(&result);
+        add_to_compiled("\nDONE\n");
+    }
+}
+
 pub struct Stdout;
 impl Stdout {
     /// This prints a Value according to its size.
@@ -167,6 +182,7 @@ impl Stdout {
         add_to_compiled("\nDONE\n");
     }
 
+
     /// This prints a pointer to a value like a CString
     /// This requires brainfuck compatibility mode to be disabled.
     pub fn print_cstr(var: Value) -> Result<(), Error> {
@@ -174,7 +190,7 @@ impl Stdout {
 
         // Dereference value and print string
         result += &var.to();
-        result += "*-[+.>-]+&";
+        result += "*[.>]&";
         // Refer back to home
         result += &var.from();
 
@@ -489,7 +505,7 @@ impl Value {
         for ch in value.to_string().chars() {
             add_to_compiled("+".repeat(ch as usize) + ">");
         }
-        add_to_compiled("+");
+
         for _ in value.to_string().chars() {
             add_to_compiled("<");
         }
@@ -512,7 +528,6 @@ impl Value {
 
     pub fn deref(&self) -> Result<Self, Error> {
         let mut result = Self::new(1)?;
-        // result.number_cells = self.size();
 
         result.reference_depth = self.reference_depth + 1;
         result.offset = self.offset;

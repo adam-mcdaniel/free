@@ -1,0 +1,55 @@
+
+
+fn start() {
+    def str = getline("Testing: ");
+
+    print("You said: `");
+    cprint(str);
+    print("`");
+
+    free(str, 128);
+}
+
+fn neq(ch1, ch2) {
+    if sub(ch1, ch2) { return 1; }
+    else { return 0; }
+}
+
+fn mul(m, n) {
+    def result = m;
+    while n {
+        result = add(result, m);
+        n = sub(n, 1);
+    }
+    return result;
+}
+
+
+fn getline(prompt) {
+    print(prompt);
+    def str = alloc(128);
+
+    def counter = 0;
+    def input = getch();
+    def running = mul(neq(input, '\n'), neq(input, 0));
+    while running {
+        *add(str, counter) = input;
+        input = getch();
+        counter = add(counter, 1);
+        running = mul(neq(input, '\n'), neq(input, 0));
+    }
+
+    return str;
+}
+
+// free_byte only frees a single cell, so free must be implemented manually
+fn free(ptr, size) {
+    while size {
+        size = sub(size, 1);
+        // free_byte is built in
+        free_byte(add(ptr, size));
+    }
+
+    // Store 0 in the return register
+    return 0;
+}
