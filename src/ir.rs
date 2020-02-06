@@ -499,7 +499,7 @@ impl Value {
     }
 
     pub fn string(value: impl ToString) -> Result<Self, Error> {
-        let result = Self::new((value.to_string().len()) as u32)?;
+        let result = Self::new((value.to_string().len() + 1) as u32)?;
 
         add_to_compiled(result.to());
         for ch in value.to_string().chars() {

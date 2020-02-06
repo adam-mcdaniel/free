@@ -91,6 +91,19 @@ impl Program {
             Ok(())
         });
         
+        // Print function
+        deforfun("cprint", &["ptr"], || {
+            Stdout::print_cstr(get("ptr")?)?;
+            Ok(())
+        });
+
+        // Println function
+        deforfun("cprintln", &["ptr"], || {
+            Stdout::print_cstr(get("ptr")?)?;
+            Stdout::print(Eval::Literal(Literal::character('\n')).lower()?);
+            Ok(())
+        });
+        
         // Allocate `size` number of bytes
         deforfun("alloc", &["size"], || {
             define("ptr", Eval::Value(Value::variable_alloc(get("size")?)?))?;
